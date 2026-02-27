@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="340" height="80">
+  <defs>
+    <linearGradient id="orangeG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B2C"/>
+      <stop offset="100%" style="stop-color:#FF8C5A"/>
+    </linearGradient>
+    <linearGradient id="blueG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A237E"/>
+      <stop offset="100%" style="stop-color:#3949AB"/>
+    </linearGradient>
+    <filter id="dropS">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#FF6B2C" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Icon bg -->
+  <rect x="0" y="4" width="72" height="72" rx="16" fill="url(#blueG)"/>
+
+  <!-- Truck -->
+  <rect x="10" y="26" width="30" height="20" rx="3" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.8"/>
+  <path d="M40 31 L40 46 L60 46 L60 40 L54 31 Z" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linejoin="round"/>
+  <circle cx="18" cy="50" r="4.5" fill="url(#blueG)" stroke="rgba(255,255,255,0.6)" stroke-width="1.8"/>
+  <circle cx="18" cy="50" r="1.8" fill="rgba(255,255,255,0.35)"/>
+  <circle cx="50" cy="50" r="4.5" fill="url(#blueG)" stroke="rgba(255,255,255,0.6)" stroke-width="1.8"/>
+  <circle cx="50" cy="50" r="1.8" fill="rgba(255,255,255,0.35)"/>
+
+  <!-- Check badge -->
+  <g filter="url(#dropS)">
+    <circle cx="57" cy="22" r="14" fill="url(#orangeG)"/>
+    <polyline points="50,22 55,28 65,15" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Wordmark — dark version -->
+  <text x="86" y="46"
+    font-family="'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif"
+    font-size="30"
+    font-weight="800"
+    letter-spacing="-0.8"
+    fill="#1A237E">Bill</text>
+  <text x="139" y="46"
+    font-family="'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif"
+    font-size="30"
+    font-weight="800"
+    letter-spacing="-0.8"
+    fill="#FF6B2C">Check</text>
+
+  <!-- Tagline -->
+  <text x="87" y="64"
+    font-family="'DM Mono', 'Courier New', monospace"
+    font-size="10"
+    font-weight="500"
+    letter-spacing="2.5"
+    fill="#6B7FA8">AUDIT ENGINE</text>
+</svg>

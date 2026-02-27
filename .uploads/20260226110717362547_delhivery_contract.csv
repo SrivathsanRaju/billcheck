@@ -1,0 +1,57 @@
+Delhivery Limited - Rate Card Agreement
+Client Contract - Valid: Jan 2025 to Dec 2025
+
+WEIGHT SLABS AND BASE RATES
+Zone,Min Weight (kg),Max Weight (kg),Base Rate (INR),Per Extra KG (INR)
+A,0,0.5,50,0
+A,0.5,1,65,0
+A,1,2,80,15
+A,2,5,110,14
+A,5,10,250,12
+A,10,30,370,10
+B,0,0.5,60,0
+B,0.5,1,75,0
+B,1,2,95,16
+B,2,5,130,15
+B,5,10,280,13
+B,10,30,420,11
+C,0,0.5,75,0
+C,0.5,1,90,0
+C,1,2,110,18
+C,2,5,160,16
+C,5,10,340,14
+C,10,30,500,12
+D,0,0.5,90,0
+D,0.5,1,110,0
+D,1,2,140,20
+D,2,5,200,18
+D,5,10,400,15
+D,10,30,600,13
+E,0,0.5,110,0
+E,0.5,1,140,0
+E,1,2,180,22
+E,2,5,250,20
+E,5,10,500,18
+E,10,30,750,15
+
+ZONE MAPPING
+Origin State,Destination State,Zone
+Maharashtra,Delhi/NCR,A
+Maharashtra,Maharashtra,A
+Maharashtra,Gujarat,B
+Maharashtra,Karnataka,B
+Maharashtra,Rajasthan,C
+Maharashtra,West Bengal,C
+Maharashtra,Madhya Pradesh,D
+Maharashtra,Telangana,D
+Maharashtra,Tamil Nadu,E
+Maharashtra,Northeast,E
+
+SURCHARGE RATES
+cod_rate,2.5,percentage
+rto_rate,50,percentage_of_base
+fuel_surcharge_pct,12,percentage_of_base
+gst_pct,18,percentage
+
+OTHER CHARGES
+None - No additional surcharges applicable

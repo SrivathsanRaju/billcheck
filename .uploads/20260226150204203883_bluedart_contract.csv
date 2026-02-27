@@ -1,0 +1,43 @@
+BlueDart Express Limited - Service Rate Card
+Agreement Period: January 2025 - December 2025
+
+FREIGHT RATES BY WEIGHT AND ZONE
+Zone,Min Weight (kg),Max Weight (kg),Base Rate (INR),Per Extra KG (INR)
+A,0,0.5,45,0
+A,0.5,1,60,0
+A,1,2,80,14
+A,2,5,105,13
+A,5,10,240,11
+A,10,30,355,9
+B,0,0.5,55,0
+B,0.5,1,70,0
+B,1,2,90,15
+B,2,5,125,14
+B,5,10,265,12
+B,10,30,400,10
+C,0,0.5,70,0
+C,0.5,1,85,0
+C,1,2,105,17
+C,2,5,155,15
+C,5,10,320,13
+C,10,30,480,11
+D,0,0.5,85,0
+D,0.5,1,105,0
+D,1,2,135,19
+D,2,5,190,17
+D,5,10,380,14
+D,10,30,570,12
+E,0,0.5,105,0
+E,0.5,1,135,0
+E,1,2,170,21
+E,2,5,240,19
+E,5,10,475,17
+E,10,30,710,14
+
+ADDITIONAL CHARGES
+cod_rate,2.5,percentage
+rto_rate,50,percentage_of_base_freight
+fuel_surcharge_pct,12,percentage_of_base_freight
+gst_pct,18,percentage
+
+No other surcharges applicable under this agreement

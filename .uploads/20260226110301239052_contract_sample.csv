@@ -1,0 +1,6 @@
+Zone,Rate,COD Percentage,RTO Percentage,Fuel Surcharge Percentage,GST Percentage
+ZONE_A,60,1.5,50,12,18
+ZONE_B,80,1.5,50,12,18
+ZONE_C,100,1.5,50,12,18
+ZONE_D,120,1.5,50,12,18
+LOCAL,40,1.5,50,12,18

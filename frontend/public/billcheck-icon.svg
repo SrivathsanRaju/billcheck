@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B2C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF8C5A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A237E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3949AB;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#FF6B2C" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="80" height="80" rx="18" fill="url(#bgGrad)"/>
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>
+
+  <!-- Truck body -->
+  <rect x="10" y="30" width="34" height="22" rx="3.5" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
+
+  <!-- Truck cab -->
+  <path d="M44 37 L44 52 L68 52 L68 45 L61 37 Z" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- Wheels -->
+  <circle cx="22" cy="57" r="5" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+  <circle cx="22" cy="57" r="2" fill="rgba(255,255,255,0.35)"/>
+  <circle cx="57" cy="57" r="5" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+  <circle cx="57" cy="57" r="2" fill="rgba(255,255,255,0.35)"/>
+
+  <!-- Orange check badge -->
+  <g filter="url(#shadow)">
+    <circle cx="61" cy="26" r="15" fill="url(#iconGrad)"/>
+    <polyline points="53,26 59,33 70,18" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
