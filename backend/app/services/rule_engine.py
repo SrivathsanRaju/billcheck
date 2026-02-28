@@ -1,264 +1,307 @@
-from typing import List, Dict, Optional
-from app.models.schemas import DiscrepancyResult, InvoiceData, ContractData
-from app.services.confidence_scorer import (
-    score_weight_check, score_rate_check, score_zone_check,
-    score_gst_check, score_duplicate_check, score_arithmetic_check
-)
-from app.services.pincode_validator import validate_zone, derive_zone
+"""
+Universal Rule Engine — provider-agnostic billing audit.
 
-GST_MULTIPLIER = 1.18  # All overcharges grossed up with GST
+Works for: BlueDart, Delhivery, DTDC, Ekart, Shadowfax, XpressBees,
+           FedEx, DHL, Ecom Express, Smartr, and any other provider.
+
+Calculation rules (applied from CONTRACT rates, not hardcoded):
+  Base freight  = contract weight slab lookup (zone + weight bracket)
+  Fuel          = contract.fuel_surcharge_pct % of expected base freight
+  RTO           = contract.rto_rate % of expected base freight
+  COD           = contract.cod_rate % of (expected base + expected fuel)
+  GST           = 18% grossed up on every overcharge amount
+  Other         = 0 allowed (full amount is overcharge)
+
+Overcharge = (billed - expected) × (1 + gst/100)
+Each check fires MAXIMUM ONCE per AWB. Tolerance = ₹1.
+"""
+import re
+from typing import Optional
+from app.models.schemas import DiscrepancyResult, InvoiceData, ContractData
+
+TOLERANCE = 1.0   # ₹1 rounding tolerance
+
+# Default rates used ONLY when contract doesn't specify
+DEFAULT_FUEL_PCT  = 12.0
+DEFAULT_RTO_PCT   = 50.0
+DEFAULT_COD_PCT   = 2.5
+DEFAULT_GST_PCT   = 18.0
+
+# Zone alias normalization — handles any provider's zone naming
+ZONE_ALIASES: dict[str, str] = {
+    # Words → letter
+    "local": "A",   "same city": "A",  "same_city": "A",  "city": "A",
+    "metro": "B",   "tier1": "B",      "tier 1": "B",
+    "regional": "C","region": "C",     "tier2": "C",      "tier 2": "C",
+    "national": "D","pan india": "D",  "pan_india": "D",  "tier3": "D",  "tier 3": "D",
+    "remote": "E",  "special": "E",    "oda": "E",        "tier4": "E",  "tier 4": "E",
+    # Numbers → letter
+    "1": "A", "2": "B", "3": "C", "4": "D", "5": "E",
+    # Roman → letter
+    "i": "A", "ii": "B", "iii": "C", "iv": "D", "v": "E",
+    # Delhivery zones
+    "z1": "A", "z2": "B", "z3": "C", "z4": "D", "z5": "E",
+    # Common numeric zone codes
+    "zone a": "A", "zone b": "B", "zone c": "C", "zone d": "D", "zone e": "E",
+    "zone 1": "A", "zone 2": "B", "zone 3": "C", "zone 4": "D", "zone 5": "E",
+}
+
+
+def _normalize_zone(z: str) -> str:
+    """Normalize any zone name to a single letter A-E."""
+    if not z:
+        return ""
+    z = z.strip()
+    # Already a single letter
+    if len(z) == 1 and z.upper() in "ABCDE":
+        return z.upper()
+    lower = z.lower().strip()
+    if lower in ZONE_ALIASES:
+        return ZONE_ALIASES[lower]
+    # Partial match — e.g. "Zone_B" → "B"
+    match = re.search(r'\b([A-Ea-e1-5])\b', z)
+    if match:
+        c = match.group(1).upper()
+        if c in "ABCDE":
+            return c
+        return ZONE_ALIASES.get(c, c)
+    return z.upper()
+
+
+def _gst_multiplier(contract: ContractData) -> float:
+    """GST gross-up factor from contract (default 1.18)."""
+    pct = contract.gst_pct if contract.gst_pct else DEFAULT_GST_PCT
+    return 1 + pct / 100
 
 
 def get_expected_base_freight(contract: ContractData, zone: str, weight: float) -> Optional[float]:
-    """Calculate expected base freight from contract weight slabs."""
-    if not contract.weight_slabs or not zone:
+    """
+    Look up expected base freight from contract weight slabs.
+    Handles zone normalization — e.g. 'Metro' → 'B', 'Zone 2' → 'B'.
+    """
+    if not contract.weight_slabs or not zone or weight <= 0:
         return None
+
+    norm_zone = _normalize_zone(zone)
 
     for slab in contract.weight_slabs:
-        mn = float(slab.get("min", 0))
-        mx = float(slab.get("max", float("inf")))
-        slab_zone = str(slab.get("zone", "")).upper()
+        slab_zone = _normalize_zone(str(slab.get("zone", "")))
+        if slab_zone != norm_zone:
+            continue
+        mn     = float(slab.get("min", 0))
+        mx     = float(slab.get("max", float("inf")))
+        per_kg = float(slab.get("per_extra_kg", 0))
+        base   = float(slab.get("base_rate", 0))
 
-        if slab_zone != zone.upper():
+        # Slab match: weight falls in (mn, mx] — first slab starts from 0
+        in_slab = (mn == 0 and weight <= mx) or (mn > 0 and mn < weight <= mx)
+        if not in_slab:
             continue
 
-        if mn == 0:
-            in_slab = weight <= mx
-        else:
-            in_slab = mn < weight <= mx
-        if weight == mn and mn > 0:
-            in_slab = False
-
-        if in_slab:
-            base = float(slab.get("base_rate", 0))
-            per_kg = float(slab.get("per_extra_kg", 0))
-            return base if per_kg == 0 else base + (weight - mn) * per_kg
+        if per_kg > 0:
+            return round(base + (weight - mn) * per_kg, 2)
+        return base
 
     return None
 
 
-def check_weight_overcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.weight_billed or not contract.weight_slabs:
+# ─── Internal helpers ──────────────────────────────────────────────────
+
+def _fuel_pct(contract: ContractData) -> float:
+    return contract.fuel_surcharge_pct if contract.fuel_surcharge_pct else DEFAULT_FUEL_PCT
+
+def _rto_pct(contract: ContractData) -> float:
+    return contract.rto_rate if contract.rto_rate else DEFAULT_RTO_PCT
+
+def _cod_pct(contract: ContractData) -> float:
+    return contract.cod_rate if contract.cod_rate else DEFAULT_COD_PCT
+
+def _exp_fuel(base: float, contract: ContractData) -> float:
+    return round(base * _fuel_pct(contract) / 100, 2)
+
+def _exp_rto(base: float, contract: ContractData) -> float:
+    return round(base * _rto_pct(contract) / 100, 2)
+
+def _exp_cod(base: float, fuel: float, contract: ContractData) -> float:
+    return round((base + fuel) * _cod_pct(contract) / 100, 2)
+
+
+# ─── Check 1: Base freight deviation ──────────────────────────────────
+
+def check_base_freight(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    billed = invoice.base_freight or 0
+    if billed <= 0:
+        return None
+    zone   = (invoice.zone or "").strip()
+    weight = invoice.weight_billed or 0
+    if not zone or weight <= 0:
         return None
 
-    weight = invoice.weight_billed
-    zone = invoice.zone or "B"
-    expected_base = get_expected_base_freight(contract, zone, weight)
-    if expected_base is None:
+    expected = get_expected_base_freight(contract, zone, weight)
+    if expected is None:
         return None
 
-    billed_base = invoice.base_freight or 0
-    if billed_base > expected_base * 1.05:
-        overcharge = round((billed_base - expected_base) * GST_MULTIPLIER, 2)
-        score, reason = score_weight_check(billed_base, expected_base)
-        return DiscrepancyResult(
-            check_type="weight_overcharge",
-            severity="critical" if overcharge > 100 else "high",
-            description=f"Base freight overcharge: billed ₹{billed_base:.2f}, contract rate for {weight}kg Zone {zone} = ₹{expected_base:.2f} (incl. GST)",
-            billed_value=billed_base,
-            expected_value=expected_base,
-            overcharge_amount=overcharge,
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
-
-
-def check_zone_mismatch(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    # Skipped — requires provider-specific pincode→zone table to avoid false positives
-    return None
-
-
-def check_rate_deviation(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.base_freight or not contract.weight_slabs:
+    diff = billed - expected
+    if diff <= TOLERANCE:
         return None
 
-    zone = invoice.zone or "B"
-    weight = invoice.weight_billed or 1.0
-    expected_base = get_expected_base_freight(contract, zone, weight)
-    if expected_base is None:
-        return None
+    gst  = _gst_multiplier(contract)
+    overcharge = round(diff * gst, 2)
+    pct_over   = diff / max(expected, 0.01) * 100
 
-    billed = invoice.base_freight
-    overcharge = billed - expected_base
-    if overcharge > 2:
-        diff_pct = overcharge / max(expected_base, 0.01)
-        score, reason = score_rate_check(billed, expected_base)
-        return DiscrepancyResult(
-            check_type="rate_deviation",
-            severity="critical" if overcharge > 50 else "high",
-            description=f"Base rate overcharge {diff_pct:.1%}: billed ₹{billed:.2f}, contract ₹{expected_base:.2f} for {weight}kg Zone {zone} (incl. GST)",
-            billed_value=billed,
-            expected_value=expected_base,
-            overcharge_amount=round(overcharge * GST_MULTIPLIER, 2),
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
-
-
-def check_cod_fee_mismatch(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.cod_fee or invoice.cod_fee <= 0:
-        return None
-    if not contract.cod_rate:
-        return None
-
-    # COD = cod_rate% of (base_freight + fuel_surcharge)
-    base = invoice.base_freight or 0
-    fuel = invoice.fuel_surcharge or 0
-    taxable_base = base + fuel
-    cod_rate = contract.cod_rate
-    expected_cod = round(taxable_base * cod_rate / 100, 2)
-
-    billed_cod = invoice.cod_fee
-    overcharge = billed_cod - expected_cod
-    # Use flat ₹2 tolerance to catch small mismatches like the BD300010 case (₹30 vs ₹8.40)
-    if overcharge > 2:
-        score, reason = score_rate_check(billed_cod, expected_cod)
-        return DiscrepancyResult(
-            check_type="cod_fee_mismatch",
-            severity="high",
-            description=f"COD fee mismatch: billed ₹{billed_cod:.2f}, expected ₹{expected_cod:.2f} ({cod_rate}% of base+fuel ₹{taxable_base:.2f}, incl. GST)",
-            billed_value=billed_cod,
-            expected_value=expected_cod,
-            overcharge_amount=round(overcharge * GST_MULTIPLIER, 2),
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
-
-
-def check_rto_overcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.rto_fee or invoice.rto_fee <= 0:
-        return None
-    if not contract.rto_rate:
-        return None
-
-    base = invoice.base_freight or 0
-    rto_rate = contract.rto_rate
-    expected_rto = round(base * rto_rate / 100, 2)
-
-    overcharge = invoice.rto_fee - expected_rto
-    # Use flat ₹2 tolerance to catch BD300007 case (₹150 vs ₹140 = ₹10 overcharge)
-    if overcharge > 2:
-        score, reason = score_rate_check(invoice.rto_fee, expected_rto)
-        return DiscrepancyResult(
-            check_type="rto_overcharge",
-            severity="high",
-            description=f"RTO overcharge: billed ₹{invoice.rto_fee:.2f}, expected ₹{expected_rto:.2f} ({rto_rate}% of base ₹{base:.2f}, incl. GST)",
-            billed_value=invoice.rto_fee,
-            expected_value=expected_rto,
-            overcharge_amount=round(overcharge * GST_MULTIPLIER, 2),
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
-
-
-def check_fuel_surcharge_mismatch(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.fuel_surcharge or invoice.fuel_surcharge <= 0:
-        return None
-    if not contract.fuel_surcharge_pct:
-        return None
-
-    base = invoice.base_freight or 0
-    fuel_pct = contract.fuel_surcharge_pct
-    expected_fuel = round(base * fuel_pct / 100, 2)
-
-    overcharge = invoice.fuel_surcharge - expected_fuel
-    # Use flat ₹1 tolerance to catch BD300008 (₹8.40) and BD300009 (₹30) cases
-    if overcharge > 1:
-        score, reason = score_rate_check(invoice.fuel_surcharge, expected_fuel)
-        return DiscrepancyResult(
-            check_type="fuel_surcharge_mismatch",
-            severity="high" if overcharge > 20 else "medium",
-            description=f"Fuel surcharge overcharge: billed ₹{invoice.fuel_surcharge:.2f}, expected ₹{expected_fuel:.2f} ({fuel_pct}% of base ₹{base:.2f}, incl. GST)",
-            billed_value=invoice.fuel_surcharge,
-            expected_value=expected_fuel,
-            overcharge_amount=round(overcharge * GST_MULTIPLIER, 2),
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
-
-
-def check_non_contracted_surcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.other_surcharges or invoice.other_surcharges <= 0:
-        return None
-
-    # Full amount including GST is recoverable
-    overcharge = round(invoice.other_surcharges * GST_MULTIPLIER, 2)
     return DiscrepancyResult(
-        check_type="non_contracted_surcharge",
-        severity="medium",
-        description=f"Non-contracted surcharge ₹{invoice.other_surcharges:.2f} — not in rate card (incl. GST ₹{overcharge:.2f})",
-        billed_value=invoice.other_surcharges,
-        expected_value=0,
-        overcharge_amount=overcharge,
-        confidence_score=0.9,
-        confidence_reason="Contract states: No other surcharges applicable under this agreement.",
+        check_type="rate_deviation",
+        severity="critical" if overcharge > 100 else "high",
+        description=(
+            f"Base freight overcharge: billed ₹{billed:.2f}, contract rate "
+            f"for {weight}kg Zone {_normalize_zone(zone)} = ₹{expected:.2f} "
+            f"(+{pct_over:.1f}%, overcharge incl. GST = ₹{overcharge:.2f})"
+        ),
+        billed_value=billed, expected_value=expected, overcharge_amount=overcharge,
+        confidence_score=0.95,
+        confidence_reason=f"Direct contract rate lookup — zone {_normalize_zone(zone)} + {weight}kg slab match.",
     )
 
 
-def check_gst_miscalculation(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.total_billed or not invoice.base_freight:
+# ─── Check 2: Fuel surcharge ───────────────────────────────────────────
+
+def check_fuel_surcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    billed = invoice.fuel_surcharge or 0
+    if billed <= 0:
         return None
 
-    gst_pct = contract.gst_pct or invoice.gst_rate or 18
-    taxable = (invoice.base_freight or 0) + (invoice.fuel_surcharge or 0) + \
-              (invoice.cod_fee or 0) + (invoice.rto_fee or 0) + (invoice.other_surcharges or 0)
-    expected_gst = round(taxable * gst_pct / 100, 2)
-    expected_total = round(taxable + expected_gst, 2)
-    billed_total = invoice.total_billed
-
-    if billed_total > expected_total + 2:
-        billed_gst = billed_total - taxable
-        score, reason = score_gst_check(billed_gst, expected_gst)
-        return DiscrepancyResult(
-            check_type="gst_miscalculation",
-            severity="high",
-            description=f"GST error: billed ₹{billed_gst:.2f}, expected ₹{expected_gst:.2f} at {gst_pct}% on taxable ₹{taxable:.2f}",
-            billed_value=billed_gst,
-            expected_value=expected_gst,
-            overcharge_amount=round(max(0, billed_gst - expected_gst), 2),
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
-
-
-def check_arithmetic_total_mismatch(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
-    if not invoice.total_billed:
+    zone, weight = (invoice.zone or "").strip(), invoice.weight_billed or 0
+    exp_base = get_expected_base_freight(contract, zone, weight) if zone and weight > 0 else None
+    base_ref = exp_base if exp_base is not None else (invoice.base_freight or 0)
+    if base_ref <= 0:
         return None
 
-    gst_pct = invoice.gst_rate or 18
-    taxable = (invoice.base_freight or 0) + (invoice.fuel_surcharge or 0) + \
-              (invoice.cod_fee or 0) + (invoice.rto_fee or 0) + (invoice.other_surcharges or 0)
-    calculated_total = round(taxable * (1 + gst_pct / 100), 2)
-    diff = invoice.total_billed - calculated_total
+    pct      = _fuel_pct(contract)
+    expected = round(base_ref * pct / 100, 2)
+    diff     = billed - expected
+    if diff <= TOLERANCE:
+        return None
 
-    if diff > 2:
-        score, reason = score_arithmetic_check(invoice.total_billed, calculated_total)
-        return DiscrepancyResult(
-            check_type="arithmetic_total_mismatch",
-            severity="critical",
-            description=f"Total mismatch: billed ₹{invoice.total_billed:.2f}, calculated ₹{calculated_total:.2f} (diff ₹{diff:.2f})",
-            billed_value=invoice.total_billed,
-            expected_value=calculated_total,
-            overcharge_amount=round(max(0, diff), 2),
-            confidence_score=score,
-            confidence_reason=reason,
-        )
-    return None
+    gst        = _gst_multiplier(contract)
+    overcharge = round(diff * gst, 2)
 
+    return DiscrepancyResult(
+        check_type="fuel_surcharge_mismatch",
+        severity="high" if overcharge > 20 else "medium",
+        description=(
+            f"Fuel surcharge overcharge: billed ₹{billed:.2f}, "
+            f"expected ₹{expected:.2f} ({pct:.0f}% of base ₹{base_ref:.2f}, "
+            f"overcharge incl. GST = ₹{overcharge:.2f})"
+        ),
+        billed_value=billed, expected_value=expected, overcharge_amount=overcharge,
+        confidence_score=0.92,
+        confidence_reason=f"Contract fuel surcharge rate is {pct:.0f}% of base freight.",
+    )
+
+
+# ─── Check 3: RTO fee ──────────────────────────────────────────────────
+
+def check_rto(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    billed = invoice.rto_fee or 0
+    if billed <= 0:
+        return None
+
+    zone, weight = (invoice.zone or "").strip(), invoice.weight_billed or 0
+    exp_base = get_expected_base_freight(contract, zone, weight) if zone and weight > 0 else None
+    base_ref = exp_base if exp_base is not None else (invoice.base_freight or 0)
+    if base_ref <= 0:
+        return None
+
+    pct      = _rto_pct(contract)
+    expected = round(base_ref * pct / 100, 2)
+    diff     = billed - expected
+    if diff <= TOLERANCE:
+        return None
+
+    gst        = _gst_multiplier(contract)
+    overcharge = round(diff * gst, 2)
+
+    return DiscrepancyResult(
+        check_type="rto_overcharge",
+        severity="high",
+        description=(
+            f"RTO overcharge: billed ₹{billed:.2f}, "
+            f"expected ₹{expected:.2f} ({pct:.0f}% of base ₹{base_ref:.2f}, "
+            f"overcharge incl. GST = ₹{overcharge:.2f})"
+        ),
+        billed_value=billed, expected_value=expected, overcharge_amount=overcharge,
+        confidence_score=0.93,
+        confidence_reason=f"Contract RTO rate is {pct:.0f}% of base freight.",
+    )
+
+
+# ─── Check 4: COD fee ──────────────────────────────────────────────────
+
+def check_cod(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    billed = invoice.cod_fee or 0
+    if billed <= 0:
+        return None
+
+    zone, weight = (invoice.zone or "").strip(), invoice.weight_billed or 0
+    exp_base  = get_expected_base_freight(contract, zone, weight) if zone and weight > 0 else None
+    base_ref  = exp_base if exp_base is not None else (invoice.base_freight or 0)
+    if base_ref <= 0:
+        return None
+
+    fuel_ref  = _exp_fuel(base_ref, contract)
+    pct       = _cod_pct(contract)
+    expected  = _exp_cod(base_ref, fuel_ref, contract)
+    diff      = billed - expected
+    if diff <= TOLERANCE:
+        return None
+
+    gst        = _gst_multiplier(contract)
+    overcharge = round(diff * gst, 2)
+
+    return DiscrepancyResult(
+        check_type="cod_fee_mismatch",
+        severity="high",
+        description=(
+            f"COD fee overcharge: billed ₹{billed:.2f}, "
+            f"expected ₹{expected:.2f} ({pct:.1f}% of base+fuel "
+            f"₹{base_ref + fuel_ref:.2f}, overcharge incl. GST = ₹{overcharge:.2f})"
+        ),
+        billed_value=billed, expected_value=expected, overcharge_amount=overcharge,
+        confidence_score=0.92,
+        confidence_reason=f"Contract COD rate is {pct:.1f}% of (base freight + fuel surcharge).",
+    )
+
+
+# ─── Check 5: Non-contracted surcharges ───────────────────────────────
+
+def check_non_contracted_surcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    other = invoice.other_surcharges or 0
+    if other <= TOLERANCE:
+        return None
+
+    gst        = _gst_multiplier(contract)
+    overcharge = round(other * gst, 2)
+
+    return DiscrepancyResult(
+        check_type="non_contracted_surcharge",
+        severity="medium",
+        description=(
+            f"Non-contracted surcharge ₹{other:.2f} billed — "
+            f"contract permits only base freight, fuel, RTO, COD and GST. "
+            f"Full amount recoverable incl. GST = ₹{overcharge:.2f}"
+        ),
+        billed_value=other, expected_value=0, overcharge_amount=overcharge,
+        confidence_score=0.95,
+        confidence_reason="Contract explicitly prohibits unlisted surcharges.",
+    )
+
+
+# ─── Exported check list — order matters, each fires MAX ONCE per AWB ──
 
 ALL_CHECKS = [
-    check_zone_mismatch,
-    check_rate_deviation,
-    check_fuel_surcharge_mismatch,
-    check_rto_overcharge,
-    check_cod_fee_mismatch,
+    check_base_freight,
+    check_fuel_surcharge,
+    check_rto,
+    check_cod,
     check_non_contracted_surcharge,
-    check_gst_miscalculation,
-    check_arithmetic_total_mismatch,
 ]
