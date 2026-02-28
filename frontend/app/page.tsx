@@ -64,7 +64,6 @@ export default function OverviewPage() {
             <h1 className="page-title">Command Overview</h1>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--green)', background: 'var(--green-light)', border: '1px solid rgba(0,196,140,0.2)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em', fontWeight: 600 }}>LIVE</span>
           </div>
-          <p className="page-sub">Billing audit intelligence · all providers · all batches</p>
         </div>
         <Link href="/upload" className="btn btn-primary btn-lg">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -108,10 +107,9 @@ export default function OverviewPage() {
         </div>
 
         {/* Donut */}
-        <div className="card" style={{ padding: '20px 20px 16px' }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', padding: '20px 20px 16px' }}>
           <div style={{ marginBottom: 16 }}>
             <div className="section-title">Violation Distribution</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Where money is being lost</div>
           </div>
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={190}>
@@ -119,12 +117,28 @@ export default function OverviewPage() {
                 <Pie data={pieData} cx="50%" cy="46%" innerRadius={50} outerRadius={76} dataKey="value" paddingAngle={3}>
                   {pieData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v: any) => formatINR(v)} contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', borderRadius: 10, fontSize: 12, color: 'var(--text-primary)' }} />
-                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 13, color: 'var(--text-muted)' }} />
+                <Tooltip content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0];
+                  return (
+                    <div style={{
+                      background: 'rgba(13,15,26,0.92)',
+                      border: `1px solid ${d.payload.fill}66`,
+                      borderRadius: 10,
+                      padding: '9px 14px',
+                      backdropFilter: 'blur(16px)',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#F0F2FF', marginBottom: 3 }}>{d.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: d.payload.fill, fontFamily: 'monospace' }}>{formatINR(d.value)}</div>
+                    </div>
+                  );
+                }} />
+                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 13, color: '#C5CADF' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">No data yet</div></div>
+            <div className="empty-state" style={{ padding: 40 }}><div style={{ fontSize: 14, color: 'var(--text-muted)' }}>No data yet</div></div>
           )}
         </div>
       </div>
@@ -134,7 +148,6 @@ export default function OverviewPage() {
         <div className="card" style={{ padding: '20px 20px 16px', marginBottom: 20 }}>
           <div style={{ marginBottom: 16 }}>
             <div className="section-title">Check Frequency vs Financial Impact</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>High frequency + high impact = highest priority to dispute</div>
           </div>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 60 }}>
@@ -159,7 +172,6 @@ export default function OverviewPage() {
         <div className="card-header">
           <div>
             <div className="section-title">Recent Audits</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Latest processed batches</div>
           </div>
           <Link href="/batches" className="btn btn-ghost btn-sm">View all →</Link>
         </div>
