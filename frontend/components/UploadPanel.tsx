@@ -148,11 +148,11 @@ export default function UploadPanel({ onBatchCreated }: Props) {
                   <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:10 }}>
                     <div>
                       <div className="label" style={{ marginBottom:5 }}>Contract name</div>
-                      <input className="input" value={saveName} onChange={e=>setSaveName(e.target.value)} placeholder="e.g. BlueDart Q1 2025" style={{ fontSize:12 }} />
+                      <input className="input" value={saveName} onChange={e=>setSaveName(e.target.value)} placeholder="e.g. BlueDart Q1 2025 / Delhivery Jan Batch" style={{ fontSize:12 }} />
                     </div>
                     <div>
                       <div className="label" style={{ marginBottom:5 }}>Provider</div>
-                      <input className="input" value={saveProv} onChange={e=>setSaveProv(e.target.value)} placeholder="e.g. BlueDart" style={{ fontSize:12 }} />
+                      <input className="input" value={saveProv} onChange={e=>setSaveProv(e.target.value)} placeholder="e.g. BlueDart / Delhivery / DTDC" style={{ fontSize:12 }} />
                     </div>
                   </div>
                 )}
