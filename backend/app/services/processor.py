@@ -47,6 +47,7 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
                 origin_pincode=inv.origin_pincode or "",
                 destination_pincode=inv.destination_pincode or "",
                 weight_billed=inv.weight_billed or 0,
+                actual_weight=inv.actual_weight if inv.actual_weight is not None and inv.actual_weight > 0 else None,
                 zone=inv.zone or "",
                 base_freight=inv.base_freight or 0,
                 # Preserve None — zero suppression: 0.00 means absent, not ₹0
