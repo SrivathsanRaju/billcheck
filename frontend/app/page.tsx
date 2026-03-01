@@ -37,7 +37,11 @@ export default function OverviewPage() {
   const [batches, setBatches] = useState<any[]>([]);
 
   useEffect(() => {
-    listBatches().then(r => setBatches(r.data.slice(0, 6))).catch(() => {});
+    listBatches().then(r => {
+      // Handle both paginated {items:[...]} and legacy flat array
+      const list = Array.isArray(r.data) ? r.data : (r.data.items || []);
+      setBatches(list.slice(0, 6));
+    }).catch(() => {});
     getAnalytics().then(r => setAnalytics(r.data)).catch(() => {});
   }, []);
 
