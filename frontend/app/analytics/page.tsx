@@ -17,6 +17,8 @@ const CL: Record<string,string> = {
   rto_overcharge:           'RTO',
   non_contracted_surcharge: 'Unlisted',
   duplicate_awb:            'Duplicate',
+  weight_overcharge:        'Weight Pad',
+  weight_overcharge:         'Weight Pad',
 };
 const CD: Record<string,string> = {
   rate_deviation:           'Base freight above contracted zone rate',
@@ -25,6 +27,8 @@ const CD: Record<string,string> = {
   rto_overcharge:           'Return freight above contracted %',
   non_contracted_surcharge: 'Surcharge not permitted in contract',
   duplicate_awb:            'AWB billed more than once',
+  weight_overcharge:        'Billed weight exceeds actual declared weight',
+  weight_overcharge:         'Billed weight exceeds actual/declared weight',
 };
 
 const TOOLTIP_STYLE = {
@@ -104,7 +108,7 @@ export default function AnalyticsPage() {
         <KPICard label="Avg / Batch"   value={formatINR(avgPerBatch)} sub="per audit run"/>
         <KPICard label="Top Violation" value={top?(CL[top.check_type]||top.check_type):'—'} sub={top?`${formatINR(top.overcharge)} · ${top.count} hits`:'no data'} accent="red"/>
         <KPICard label="Highest Risk"  value={topProv?.provider||'—'} sub={topProv?formatINR(topProv.overcharge):'no data'} accent="amber"/>
-        <KPICard label="Checks Active" value={`${data.check_type_totals?.length??0} / 5`} sub="violation categories"/>
+        <KPICard label="Checks Active" value={`${data.check_type_totals?.length??0} / 6`} sub="violation categories"/>
       </div>
 
       {/* Monthly trend — only show if data exists */}
