@@ -162,7 +162,7 @@ export default function AnalyticsPage() {
           <div><div className="section-title">Violation Breakdown</div></div>
         </div>
         {data.check_type_totals?.length>0 ? (
-          <table className="data-table">
+          <div className="table-scroll-wrapper"><table className="data-table">
             <thead>
               <tr>
                 <th>Violation</th>
@@ -200,7 +200,7 @@ export default function AnalyticsPage() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         ):<div className="empty-state"><div className="empty-sub">No data yet</div></div>}
       </div>
 
@@ -210,7 +210,7 @@ export default function AnalyticsPage() {
           <div><div className="section-title">Provider Risk Scorecard</div></div>
         </div>
         {providers.length>0 ? (
-          <table className="data-table">
+          <div className="table-scroll-wrapper"><table className="data-table">
             <thead>
               <tr>
                 <th>Rank</th>
@@ -245,7 +245,7 @@ export default function AnalyticsPage() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         ):<div className="empty-state"><div className="empty-sub">No provider data yet</div></div>}
       </div>
     </div>
