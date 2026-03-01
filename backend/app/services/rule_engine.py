@@ -296,6 +296,77 @@ def check_non_contracted_surcharge(invoice: InvoiceData, contract: ContractData)
     )
 
 
+
+# ─── Check 6: Weight overcharge ───────────────────────────────────────
+# Fires only when invoice has BOTH weight_billed AND actual_weight.
+# If billed weight > actual weight by more than rounding tolerance (0.5 kg),
+# the provider is padding weight. Overcharge = difference × contracted rate/kg.
+
+def check_weight_overcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    billed_wt = invoice.weight_billed
+    actual_wt  = invoice.actual_weight
+
+    # Only run when both weights are present
+    if billed_wt is None or actual_wt is None:
+        return None
+    if actual_wt <= 0 or billed_wt <= 0:
+        return None
+
+    # Allow 0.5 kg rounding tolerance (industry standard)
+    WEIGHT_TOLERANCE = 0.5
+    padding = billed_wt - actual_wt
+    if padding <= WEIGHT_TOLERANCE:
+        return None
+
+    # Calculate overcharge: find per-kg rate from contract slab for actual weight
+    zone  = (invoice.zone or "").strip()
+    nzone = _normalize_zone(zone)
+
+    rate_per_kg = 0.0
+    for slab in contract.weight_slabs:
+        slab_zone = _normalize_zone(str(slab.get("zone", "")))
+        if slab_zone and nzone and slab_zone != nzone:
+            continue
+        lo = float(slab.get("min", 0))
+        hi = float(slab.get("max", 999999))
+        if lo <= actual_wt <= hi:
+            base    = float(slab.get("base_rate", 0))
+            per_kg  = float(slab.get("per_extra_kg", 0))
+            slab_wt = hi - lo if hi < 999999 else actual_wt - lo
+            if per_kg > 0:
+                rate_per_kg = per_kg
+            elif slab_wt > 0 and base > 0:
+                rate_per_kg = base / max(slab_wt, 1)
+            break
+
+    # If no slab found, estimate from base_freight / weight_billed
+    if rate_per_kg <= 0 and invoice.base_freight and billed_wt > 0:
+        rate_per_kg = invoice.base_freight / billed_wt
+
+    gst        = _gst_multiplier(contract)
+    overcharge = round(padding * rate_per_kg * gst, 2) if rate_per_kg > 0 else round(
+        # Fallback: prorate base freight
+        (padding / billed_wt) * (invoice.base_freight or 0) * gst, 2
+    )
+
+    if overcharge <= TOLERANCE:
+        return None
+
+    return DiscrepancyResult(
+        check_type="weight_overcharge",
+        severity="high",
+        description=(
+            f"Billed weight {billed_wt:.2f} kg exceeds actual weight {actual_wt:.2f} kg "
+            f"by {padding:.2f} kg. Weight padding detected — "
+            f"overcharge ₹{overcharge:.2f} incl. GST."
+        ),
+        billed_value=billed_wt,
+        expected_value=actual_wt,
+        overcharge_amount=overcharge,
+        confidence_score=0.97,
+        confidence_reason=f"Direct comparison: billed {billed_wt:.2f} kg vs actual {actual_wt:.2f} kg — {padding:.2f} kg padding.",
+    )
+
 # ─── Exported check list — order matters, each fires MAX ONCE per AWB ──
 
 ALL_CHECKS = [
@@ -304,4 +375,5 @@ ALL_CHECKS = [
     check_rto,
     check_cod,
     check_non_contracted_surcharge,
+    check_weight_overcharge,
 ]
