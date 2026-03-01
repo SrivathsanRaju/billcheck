@@ -11,7 +11,8 @@ INVOICE_COL_MAP = {
     "shipment_date":       ["shipment date", "date", "dispatch date", "booking date"],
     "origin_pincode":      ["origin pincode", "origin pin", "from pincode", "source pincode", "origin_pincode"],
     "destination_pincode": ["destination pincode", "dest pincode", "to pincode", "destination_pincode", "dest pin"],
-    "weight_billed":       ["weight (kg)", "weight", "billed weight", "weight_billed", "chargeable weight"],
+    "weight_billed":       ["weight (kg)", "weight", "billed weight", "weight_billed", "chargeable weight", "charged weight"],
+    "actual_weight":       ["actual weight", "actual_weight", "act weight", "act_weight", "actual wt", "physical weight", "dead weight", "original weight", "declared weight", "measured weight"],
     "zone":                ["zone", "delivery zone", "service zone"],
     "base_freight":        ["base freight (inr)", "base freight", "freight", "base_freight", "basic freight"],
     "cod_fee":             ["cod fee (inr)", "cod fee", "cod", "cod_fee", "cash on delivery"],
@@ -105,6 +106,7 @@ def extract_invoices_from_csv(file_path: str) -> List[InvoiceData]:
             origin_pincode=get('origin_pincode'),
             destination_pincode=get('destination_pincode'),
             weight_billed=_clean_float(get('weight_billed')),
+            actual_weight=_clean_float(get('actual_weight')),
             zone=get('zone'),
             base_freight=_clean_float(get('base_freight')),
             cod_fee=_clean_float(get('cod_fee')),
@@ -211,7 +213,7 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
 
     return ContractData(
         weight_slabs=weight_slabs,
-        cod_rate=cod_rate if cod_rate is not None else 1.5,
+        cod_rate=cod_rate if cod_rate is not None else 2.5,
         cod_rate_type=cod_rate_type,
         rto_rate=rto_rate if rto_rate is not None else 50.0,
         fuel_surcharge_pct=fuel_pct if fuel_pct is not None else 12.0,
@@ -247,7 +249,7 @@ def parse_contract_csv(content: str) -> dict:
             zones[slab.zone] = slab.base_rate
         return {
             "zones": zones,
-            "cod_percentage": contract.cod_rate or 1.5,
+            "cod_percentage": contract.cod_rate or 2.5,
             "rto_percentage": contract.rto_rate or 50.0,
             "fuel_surcharge_percentage": contract.fuel_surcharge_pct or 12.0,
             "gst_percentage": contract.gst_pct,
