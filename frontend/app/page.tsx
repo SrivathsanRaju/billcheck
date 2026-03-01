@@ -56,11 +56,15 @@ export default function OverviewPage() {
   const barData = (a?.check_type_totals || []).map((c: any) => ({
     name: CL[c.check_type] || c.check_type, overcharge: Math.round(c.overcharge),
   }));
-  // Per-batch trend — shows each audit run as a point on the chart
-  const trendData = [...batches].reverse().map((b: any) => ({
-    name: `#${b.id}`,
-    overcharge: Math.round(b.summary?.total_overcharge || 0),
+  // Monthly trend from analytics (reliable) with per-batch fallback
+  const monthlyTrend = (a?.monthly_trends || []).map((m: any) => ({
+    name: new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
+    overcharge: Math.round(m.overcharge || 0),
   }));
+  const batchTrend = [...batches].reverse().map((b: any) => ({
+    name: `#${b.id}`, overcharge: Math.round(b.summary?.total_overcharge || 0),
+  }));
+  const trendData = monthlyTrend.length > 0 ? monthlyTrend : batchTrend;
 
   return (
     <div className="fade-in">
@@ -91,7 +95,7 @@ export default function OverviewPage() {
             <div className="section-title">Overcharge Trend</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Per batch across recent audits</div>
           </div>
-          {trendData.length > 0 ? (
+          {trendData.length > 0 || (a && a.total_batches > 0) ? (
             <ResponsiveContainer width="100%" height={190}>
               <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
                 <defs>
@@ -108,7 +112,7 @@ export default function OverviewPage() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">No audit data yet</div></div>
+            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">Chart data loading…</div></div>
           )}
         </div>
 
