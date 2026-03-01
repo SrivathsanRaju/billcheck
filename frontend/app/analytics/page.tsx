@@ -18,7 +18,6 @@ const CL: Record<string,string> = {
   non_contracted_surcharge: 'Unlisted',
   duplicate_awb:            'Duplicate',
   weight_overcharge:        'Weight Pad',
-  weight_overcharge:         'Weight Pad',
 };
 const CD: Record<string,string> = {
   rate_deviation:           'Base freight above contracted zone rate',
@@ -28,7 +27,6 @@ const CD: Record<string,string> = {
   non_contracted_surcharge: 'Surcharge not permitted in contract',
   duplicate_awb:            'AWB billed more than once',
   weight_overcharge:        'Billed weight exceeds actual declared weight',
-  weight_overcharge:         'Billed weight exceeds actual/declared weight',
 };
 
 const TOOLTIP_STYLE = {
