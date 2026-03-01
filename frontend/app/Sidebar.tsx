@@ -158,15 +158,20 @@ export default function Sidebar() {
         )}
       </button>
 
-      {/* Mobile: drawer + overlay */}
-      {open && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setOpen(false)}
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:90, backdropFilter:'blur(2px)' }}
-        />
-      )}
-      <div className="sidebar-mobile" style={{ transform: open ? 'translateX(0)' : 'translateX(-100%)' }}>
+      {/* Mobile: full-screen overlay — tapping anywhere outside closes drawer */}
+      <div
+        onClick={() => setOpen(false)}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(2px)',
+          zIndex: 98,
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? 'all' : 'none',
+          transition: 'opacity 240ms ease',
+        }}
+      />
+      <div className="sidebar-mobile" style={{ transform: open ? 'translateX(0)' : 'translateX(-100%)', zIndex: 99 }}>
         {sidebarContent}
       </div>
     </>
