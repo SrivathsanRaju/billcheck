@@ -9,6 +9,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <title>BillCheck — Logistics Billing Audit</title>
         <meta name="description" content="Automated logistics billing audit engine. Detect overcharges, raise disputes, recover revenue." />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/billcheck-icon.svg" type="image/svg+xml" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -17,9 +18,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div style={{ display: 'flex', minHeight: '100vh' }}>
           <Sidebar />
           <main style={{
-            flex: 1, marginLeft: 240,
+            flex: 1,
+            marginLeft: 240,
             padding: '32px 36px 52px',
-            background: 'var(--bg)', minHeight: '100vh',
+            background: 'var(--bg)',
+            minHeight: '100vh',
           }}>
             {children}
           </main>
@@ -40,4 +43,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-
