@@ -38,7 +38,6 @@ export default function OverviewPage() {
 
   useEffect(() => {
     listBatches().then(r => {
-      // Handle both paginated {items:[...]} and legacy flat array
       const list = Array.isArray(r.data) ? r.data : (r.data.items || []);
       setBatches(list.slice(0, 6));
     }).catch(() => {});
@@ -56,7 +55,6 @@ export default function OverviewPage() {
   const barData = (a?.check_type_totals || []).map((c: any) => ({
     name: CL[c.check_type] || c.check_type, overcharge: Math.round(c.overcharge),
   }));
-  // Monthly trend from analytics (reliable) with per-batch fallback
   const monthlyTrend = (a?.monthly_trends || []).map((m: any) => ({
     name: new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
     overcharge: Math.round(m.overcharge || 0),
@@ -95,7 +93,7 @@ export default function OverviewPage() {
             <div className="section-title">Overcharge Trend</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Per batch across recent audits</div>
           </div>
-          {trendData.length > 0 || (a && a.total_batches > 0) ? (
+          {trendData.length > 0 ? (
             <ResponsiveContainer width="100%" height={190}>
               <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
                 <defs>
@@ -112,7 +110,7 @@ export default function OverviewPage() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">Chart data loading…</div></div>
+            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">No audit data yet</div></div>
           )}
         </div>
 
@@ -131,14 +129,7 @@ export default function OverviewPage() {
                   if (!active || !payload?.length) return null;
                   const d = payload[0];
                   return (
-                    <div style={{
-                      background: 'rgba(13,15,26,0.92)',
-                      border: `1px solid ${d.payload.fill}66`,
-                      borderRadius: 10,
-                      padding: '9px 14px',
-                      backdropFilter: 'blur(16px)',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                    }}>
+                    <div style={{ background: 'rgba(13,15,26,0.92)', border: `1px solid ${d.payload.fill}66`, borderRadius: 10, padding: '9px 14px', backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#F0F2FF', marginBottom: 3 }}>{d.name}</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: d.payload.fill, fontFamily: 'monospace' }}>{formatINR(d.value)}</div>
                     </div>
@@ -180,9 +171,7 @@ export default function OverviewPage() {
       {/* Recent batches */}
       <div className="card">
         <div className="card-header">
-          <div>
-            <div className="section-title">Recent Audits</div>
-          </div>
+          <div><div className="section-title">Recent Audits</div></div>
           <Link href="/batches" className="btn btn-ghost btn-sm">View all →</Link>
         </div>
         {batches.length === 0 ? (
