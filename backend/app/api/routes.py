@@ -36,6 +36,19 @@ async def upload_files(
     if not contract_file and not saved_contract_id:
         raise HTTPException(status_code=400, detail="Either contract_file or saved_contract_id is required.")
 
+    # File size validation — 10MB limit to protect Railway free tier
+    MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+    invoice_bytes = await invoice_file.read()
+    if len(invoice_bytes) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="Invoice file too large. Maximum size is 10MB.")
+    await invoice_file.seek(0)
+
+    if contract_file:
+        contract_bytes = await contract_file.read()
+        if len(contract_bytes) > MAX_SIZE:
+            raise HTTPException(status_code=413, detail="Contract file too large. Maximum size is 10MB.")
+        await contract_file.seek(0)
+
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
 
@@ -195,12 +208,21 @@ async def delete_batch(batch_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/batches")
-async def list_batches(db: AsyncSession = Depends(get_db)):
+async def list_batches(page: int = 1, per_page: int = 20, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import func
+    count_result = await db.execute(select(func.count()).select_from(ProcessingBatch))
+    total = count_result.scalar()
+
     result = await db.execute(
-        select(ProcessingBatch).order_by(ProcessingBatch.created_at.desc()).limit(50)
+        select(ProcessingBatch).order_by(ProcessingBatch.created_at.desc()).offset((page-1)*per_page).limit(per_page)
     )
     batches = result.scalars().all()
-    return [
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page,
+        "items": [
         {
             "id": b.id,
             "invoice_file": b.invoice_file,
@@ -213,7 +235,8 @@ async def list_batches(db: AsyncSession = Depends(get_db)):
             "created_at": b.created_at.isoformat(),
         }
         for b in batches
-    ]
+        ]
+    }
 
 
 @router.get("/analytics")
@@ -234,14 +257,15 @@ async def save_contract(
     contract_file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.services.csv_fast_extractor import parse_contract_csv
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
     path = os.path.join(settings.UPLOAD_DIR, f"contract_{ts}_{contract_file.filename}")
     with open(path, "wb") as f:
         shutil.copyfileobj(contract_file.file, f)
-    content = open(path).read()
-    extracted = parse_contract_csv(content)
+    # Use universal extractor so saved contracts get correct rates
+    from app.services.contract_extractor import extract_contract
+    extracted_data = await extract_contract(path)
+    extracted = extracted_data.model_dump()
     contract = SavedContract(name=name, provider=provider, file_path=path, extracted_data=extracted)
     db.add(contract)
     await db.commit()
@@ -268,6 +292,16 @@ async def delete_contract(contract_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/alerts")
 async def list_alerts(db: AsyncSession = Depends(get_db)):
+    # Auto-purge read alerts older than 30 days
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    old_alerts = await db.execute(
+        select(Alert).where(Alert.is_read == True, Alert.created_at < cutoff)
+    )
+    for a in old_alerts.scalars().all():
+        await db.delete(a)
+    await db.commit()
+
     result = await db.execute(select(Alert).order_by(Alert.created_at.desc()))
     return [AlertOut.from_orm(a) for a in result.scalars().all()]
 
