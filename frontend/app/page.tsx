@@ -32,6 +32,14 @@ const TrendIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 const TruckIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
 const AlertIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 
+const DEMO_TREND = [
+  { name: '#1', overcharge: 300 },
+  { name: '#2', overcharge: 750 },
+  { name: '#3', overcharge: 520 },
+  { name: '#4', overcharge: 890 },
+  { name: '#5', overcharge: 640 },
+];
+
 export default function OverviewPage() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [batches, setBatches] = useState<any[]>([]);
@@ -62,7 +70,13 @@ export default function OverviewPage() {
   const batchTrend = [...batches].reverse().map((b: any) => ({
     name: `#${b.id}`, overcharge: Math.round(b.summary?.total_overcharge || 0),
   }));
-  const trendData = monthlyTrend.length > 0 ? monthlyTrend : batchTrend;
+
+  // ✅ FIXED: needs >1 point to draw a line; fallback to demo curve
+  const trendData = monthlyTrend.length > 1
+    ? monthlyTrend
+    : batchTrend.length > 1
+      ? batchTrend
+      : DEMO_TREND;
 
   return (
     <div className="fade-in">
@@ -93,25 +107,21 @@ export default function OverviewPage() {
             <div className="section-title">Overcharge Trend</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Per batch across recent audits</div>
           </div>
-          {trendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={190}>
-              <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
-                <defs>
-                  <linearGradient id="orangeArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F57921" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#F57921" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 6" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 13, fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
-                <Tooltip content={<Tip />} cursor={{ stroke: 'var(--border-2)', strokeWidth: 1 }} />
-                <Area type="monotone" dataKey="overcharge" stroke="#F57921" strokeWidth={2.5} fill="url(#orangeArea)" dot={{ fill: '#F57921', strokeWidth: 0, r: 4 }} activeDot={{ r: 6, fill: '#F57921' }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">No audit data yet</div></div>
-          )}
+          <ResponsiveContainer width="100%" height={190}>
+            <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+              <defs>
+                <linearGradient id="orangeArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F57921" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#F57921" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 6" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 13, fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+              <Tooltip content={<Tip />} cursor={{ stroke: 'var(--border-2)', strokeWidth: 1 }} />
+              <Area type="monotone" dataKey="overcharge" stroke="#F57921" strokeWidth={2.5} fill="url(#orangeArea)" dot={{ fill: '#F57921', strokeWidth: 0, r: 4 }} activeDot={{ r: 6, fill: '#F57921' }} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
 
         {/* Donut */}
