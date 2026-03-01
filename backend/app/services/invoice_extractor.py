@@ -254,6 +254,14 @@ def _csv_direct_map(file_path: str) -> List[InvoiceData]:
         if not data.get("gst_rate"):
             data["gst_rate"] = 18.0
 
+        # Zero suppression — 0.00 in COD/RTO/Other means absent, not ₹0
+        data = _suppress_zeros(data)
+
+        # Skip rows with no base freight
+        base = data.get("base_freight")
+        if base is None or float(base) <= 0:
+            continue
+
         try:
             invoices.append(InvoiceData(**data))
         except Exception:
@@ -340,6 +348,25 @@ async def extract_invoice(file_path: str) -> List[InvoiceData]:
         return []
 
 
+def _suppress_zeros(item: dict) -> dict:
+    """
+    Convert 0 / 0.0 / '0.00' to None for optional charge fields.
+    A zero COD/RTO/Other means the charge doesn't exist — not that it's ₹0.
+    Rule engine skips checks when value is None, preventing false positives.
+    """
+    zero_suppressible = {"cod_fee", "rto_fee", "other_surcharges", "fuel_surcharge"}
+    for field in zero_suppressible:
+        val = item.get(field)
+        if val is None:
+            continue
+        try:
+            if abs(float(val)) < 0.01:
+                item[field] = None
+        except (TypeError, ValueError):
+            item[field] = None
+    return item
+
+
 def parse_invoice_response(text: str) -> List[InvoiceData]:
     text = text.strip()
     if "```json" in text:
@@ -353,9 +380,14 @@ def parse_invoice_response(text: str) -> List[InvoiceData]:
         invoices = []
         for item in data:
             try:
-                # Default GST to 18 if missing
                 if not item.get("gst_rate"):
                     item["gst_rate"] = 18.0
+                # ── Zero suppression — prevents false COD/RTO/Other positives ──
+                item = _suppress_zeros(item)
+                # ── Skip rows with no base freight ──
+                base = item.get("base_freight")
+                if base is None or float(base) <= 0:
+                    continue
                 invoices.append(InvoiceData(**{
                     k: v for k, v in item.items()
                     if k in InvoiceData.model_fields
