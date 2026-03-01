@@ -31,8 +31,8 @@ export const bulkRaiseDisputes = (batchId: number) =>
 export const deleteBatch = (id: number) =>
   api.delete(`/api/v1/batch/${id}`);
 
-export const listBatches = () =>
-  api.get('/api/v1/batches');
+export const listBatches = (page = 1) =>
+  api.get(`/api/v1/batches?page=${page}`);
 
 export const getAnalytics = () =>
   api.get('/api/v1/analytics');
