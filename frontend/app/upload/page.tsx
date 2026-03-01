@@ -35,7 +35,7 @@ export default function UploadPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Upload Invoice</h1>
-          <p className="page-sub">Run an automated audit against your contracted rates</p>
+          
         </div>
       </div>
 
