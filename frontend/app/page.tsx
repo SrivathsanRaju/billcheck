@@ -183,7 +183,7 @@ export default function OverviewPage() {
             <Link href="/upload" className="btn btn-primary" style={{ marginTop: 14 }}>Start first audit</Link>
           </div>
         ) : (
-          <table className="data-table">
+          <div className="table-scroll-wrapper"><table className="data-table">
             <thead><tr>
               <th>Batch</th><th>Provider</th><th>Status</th>
               <th className="right">Invoices</th><th className="right">Violations</th>
@@ -202,7 +202,7 @@ export default function OverviewPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>
