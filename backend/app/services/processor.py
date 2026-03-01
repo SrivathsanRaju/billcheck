@@ -20,7 +20,7 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
         # Detect provider from file content
         try:
             with open(invoice_path, "r", encoding="utf-8", errors="replace") as f:
-                raw_text = f.read(2000)
+                raw_text = f.read(8000)
             provider = detect_provider(raw_text)
         except Exception:
             provider = "Unknown"
@@ -49,10 +49,11 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
                 weight_billed=inv.weight_billed or 0,
                 zone=inv.zone or "",
                 base_freight=inv.base_freight or 0,
-                cod_fee=inv.cod_fee or 0,
-                rto_fee=inv.rto_fee or 0,
-                fuel_surcharge=inv.fuel_surcharge or 0,
-                other_surcharges=inv.other_surcharges or 0,
+                # Preserve None — zero suppression: 0.00 means absent, not ₹0
+                cod_fee=inv.cod_fee if inv.cod_fee is not None and inv.cod_fee > 0 else None,
+                rto_fee=inv.rto_fee if inv.rto_fee is not None and inv.rto_fee > 0 else None,
+                fuel_surcharge=inv.fuel_surcharge if inv.fuel_surcharge is not None and inv.fuel_surcharge > 0 else None,
+                other_surcharges=inv.other_surcharges if inv.other_surcharges is not None and inv.other_surcharges > 0 else None,
                 gst_rate=inv.gst_rate or 18,
                 total_billed=inv.total_billed or 0,
                 raw_extracted=inv.model_dump(),
@@ -162,7 +163,7 @@ async def _extract_contract(path: str) -> ContractData:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             data = parse_contract_csv(f.read())
         return ContractData(
-            cod_rate=data.get("cod_percentage", 1.5),
+            cod_rate=data.get("cod_percentage", 2.5),
             rto_rate=data.get("rto_percentage", 50.0),
             fuel_surcharge_pct=data.get("fuel_surcharge_percentage", 12.0),
             gst_pct=data.get("gst_percentage", 18.0),
