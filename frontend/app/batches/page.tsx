@@ -40,7 +40,7 @@ export default function BatchesPage() {
             <Link href="/upload" className="btn btn-primary" style={{ marginTop:12 }}>Start now</Link>
           </div>
         ) : (
-          <table className="data-table">
+          <div className="table-scroll-wrapper"><table className="data-table">
             <thead><tr>
               <th>Batch</th><th>Invoice File</th><th>Provider</th><th>Status</th>
               <th className="right">Invoices</th><th className="right">Violations</th>
@@ -66,7 +66,7 @@ export default function BatchesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>
