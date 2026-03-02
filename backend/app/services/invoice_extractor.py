@@ -90,7 +90,7 @@ UNIVERSAL_COL_MAP = {
     ],
     "weight_billed": [
         "weight", "weight_kg", "billed_weight", "charged_weight", "chargeable_weight",
-        "billable_weight", "actual_weight", "volumetric_weight", "wt_kg",
+        "billable_weight","volumetric_weight", "wt_kg",
         # Delhivery uses
         "charge_wt",
         # DTDC uses
