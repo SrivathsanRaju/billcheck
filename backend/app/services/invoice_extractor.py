@@ -187,9 +187,13 @@ def _find_col(columns: list, aliases: list) -> Optional[str]:
     for alias in aliases:
         a = norm(alias)
         for k, orig in normed_cols.items():
-            if a == k or a in k or k in a:
+            if a == k:
+                return orig
+            # Only partial match if alias is long enough (avoids "cod" matching "destinationpincode")
+            if len(a) > 5 and (a in k or k in a):
                 return orig
     return None
+
 
 
 def _csv_direct_map(file_path: str) -> List[InvoiceData]:
