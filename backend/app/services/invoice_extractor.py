@@ -58,20 +58,12 @@ RULES:
 - If zone is missing, infer from context or leave null
 """
 
-# ─── Universal CSV column aliases — covers all major Indian providers ──────
-
 UNIVERSAL_COL_MAP = {
     "awb_number": [
         "awb", "awb_number", "awb_no", "tracking", "tracking_no", "tracking_number",
         "shipment_no", "shipment_number", "consignment", "consignment_no", "docket",
         "docket_no", "airway_bill", "waybill", "waybill_no", "lrn", "cn_no",
-        # Delhivery
-        "order_id", "reference_no",
-        # DTDC
-        "dtdc_consignment",
-        # Ekart
-        "ekl_id", "tracking_id",
-        # Shadowfax
+        "order_id", "reference_no", "dtdc_consignment", "ekl_id", "tracking_id",
         "sfx_order_id",
     ],
     "shipment_date": [
@@ -90,11 +82,7 @@ UNIVERSAL_COL_MAP = {
     ],
     "weight_billed": [
         "weight", "weight_kg", "billed_weight", "charged_weight", "chargeable_weight",
-        "billable_weight","volumetric_weight", "wt_kg",
-        # Delhivery uses
-        "charge_wt",
-        # DTDC uses
-        "billed_wt",
+        "billable_weight", "volumetric_weight", "wt_kg", "charge_wt", "billed_wt",
     ],
     "zone": [
         "zone", "delivery_zone", "service_zone", "rate_zone", "zone_code",
@@ -103,41 +91,24 @@ UNIVERSAL_COL_MAP = {
     "base_freight": [
         "base_freight", "freight", "basic_freight", "freight_charge", "freight_amount",
         "base_amount", "transport_charge", "forwarding_charge",
-        # Delhivery
-        "forward_charge", "fwd_charge",
-        # DTDC
-        "basic_charge", "air_freight",
-        # Ecom Express
-        "delivery_charge",
+        "forward_charge", "fwd_charge", "basic_charge", "air_freight", "delivery_charge",
     ],
     "fuel_surcharge": [
         "fuel_surcharge", "fuel", "fsc", "fuel_charge", "fuel_levy",
-        "fuel_surcharge_amount", "fuel_surcharge_inr",
-        # Delhivery
-        "fuel_charges",
-        # DTDC
-        "fuel_surcharge_amt",
+        "fuel_surcharge_amount", "fuel_surcharge_inr", "fuel_charges", "fuel_surcharge_amt",
     ],
     "cod_fee": [
         "cod", "cod_fee", "cod_charge", "cod_amount", "cash_on_delivery",
-        "cod_collection_fee", "cod_handling",
-        # Delhivery
-        "cod_charges",
+        "cod_collection_fee", "cod_handling", "cod_charges",
     ],
     "rto_fee": [
         "rto", "rto_fee", "rto_charge", "rto_amount", "return_fee",
-        "return_charge", "return_to_origin", "rto_forward_charge",
-        # Delhivery
-        "rto_charges",
+        "return_charge", "return_to_origin", "rto_forward_charge", "rto_charges",
     ],
     "other_surcharges": [
         "other", "other_surcharges", "other_charges", "misc", "miscellaneous",
         "additional_charges", "special_handling", "dg_charge", "oda_charge",
-        "remote_area", "oversize", "surcharge", "special_service",
-        # Delhivery
-        "other_charges",
-        # DTDC
-        "misc_charges",
+        "remote_area", "oversize", "surcharge", "special_service", "misc_charges",
     ],
     "gst_rate": [
         "gst", "gst_rate", "gst_pct", "gst_percent", "tax_rate",
@@ -146,23 +117,18 @@ UNIVERSAL_COL_MAP = {
     "total_billed": [
         "total", "total_billed", "total_amount", "invoice_amount", "billed_amount",
         "grand_total", "payable_amount", "net_amount", "amount_payable",
-        "total_inr", "total_billed_inr",
-        # Delhivery
-        "total_charges",
-        # DTDC
-        "invoice_value",
+        "total_inr", "total_billed_inr", "total_charges", "invoice_value",
     ],
 }
 
 
-def _get_gemini_model():
+def _get_gemini_client():
     try:
         from app.core.config import settings
+        from google import genai
         if not settings.GEMINI_API_KEY:
             return None
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        return genai.GenerativeModel("gemini-2.5-flash")
+        return genai.Client(api_key=settings.GEMINI_API_KEY)
     except Exception:
         return None
 
@@ -180,7 +146,6 @@ def _clean_numeric(val) -> Optional[float]:
 
 
 def _find_col(columns: list, aliases: list) -> Optional[str]:
-    """Fuzzy column matcher — case insensitive, ignores spaces/special chars."""
     import re
     def norm(s): return re.sub(r'[^a-z0-9]', '', str(s).lower())
     normed_cols = {norm(c): c for c in columns if c}
@@ -189,15 +154,12 @@ def _find_col(columns: list, aliases: list) -> Optional[str]:
         for k, orig in normed_cols.items():
             if a == k:
                 return orig
-            # Only partial match if alias is long enough (avoids "cod" matching "destinationpincode")
             if len(a) > 5 and (a in k or k in a):
                 return orig
     return None
 
 
-
 def _csv_direct_map(file_path: str) -> List[InvoiceData]:
-    """Universal direct CSV parser — tries multiple header row offsets."""
     try:
         import pandas as pd
     except ImportError:
@@ -254,14 +216,11 @@ def _csv_direct_map(file_path: str) -> List[InvoiceData]:
         if not awb or str(awb).lower() in ("awb number", "awb", "nan", "none", ""):
             continue
 
-        # Default GST to 18 if missing
         if not data.get("gst_rate"):
             data["gst_rate"] = 18.0
 
-        # Zero suppression — 0.00 in COD/RTO/Other means absent, not ₹0
         data = _suppress_zeros(data)
 
-        # Skip rows with no base freight
         base = data.get("base_freight")
         if base is None or float(base) <= 0:
             continue
@@ -279,8 +238,8 @@ async def extract_from_csv(file_path: str) -> List[InvoiceData]:
     if direct:
         return direct
 
-    model = _get_gemini_model()
-    if not model:
+    client = _get_gemini_client()
+    if not client:
         raise ValueError("Could not parse CSV. Ensure column headers are present or set GEMINI_API_KEY.")
 
     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -289,14 +248,14 @@ async def extract_from_csv(file_path: str) -> List[InvoiceData]:
     if len(lines) > 201:
         csv_text = "\n".join(lines[:201])
 
-    response = model.generate_content([
-        f"Here is a logistics invoice CSV from an Indian logistics provider. Column names may vary by provider.\n\n{csv_text}\n\n{INVOICE_EXTRACTION_PROMPT}"
-    ])
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=f"Here is a logistics invoice CSV from an Indian logistics provider. Column names may vary by provider.\n\n{csv_text}\n\n{INVOICE_EXTRACTION_PROMPT}"
+    )
     return parse_invoice_response(response.text)
 
 
 async def extract_from_pdf(file_path: str) -> List[InvoiceData]:
-    # Try pdfplumber first (no API key)
     try:
         from app.services.pdf_extractor import extract_invoices_from_pdf
         invoices = extract_invoices_from_pdf(file_path)
@@ -305,37 +264,38 @@ async def extract_from_pdf(file_path: str) -> List[InvoiceData]:
     except Exception:
         pass
 
-    # Fallback to Gemini
-    model = _get_gemini_model()
-    if not model:
+    client = _get_gemini_client()
+    if not client:
         raise ValueError("Could not extract from PDF. Ensure PDF has selectable text or set GEMINI_API_KEY.")
 
-    with open(file_path, "rb") as f:
-        pdf_b64 = base64.b64encode(f.read()).decode()
-
-    response = model.generate_content([
-        {"mime_type": "application/pdf", "data": pdf_b64},
-        INVOICE_EXTRACTION_PROMPT,
-    ])
+    from google.genai import types
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type="application/pdf"),
+            INVOICE_EXTRACTION_PROMPT,
+        ]
+    )
     return parse_invoice_response(response.text)
 
 
 async def extract_from_image(file_path: str) -> List[InvoiceData]:
-    model = _get_gemini_model()
-    if not model:
+    client = _get_gemini_client()
+    if not client:
         raise ValueError("Image extraction requires GEMINI_API_KEY.")
 
     ext = os.path.splitext(file_path)[1].lower()
     mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
     mime = mime_map.get(ext, "image/jpeg")
 
-    with open(file_path, "rb") as f:
-        img_b64 = base64.b64encode(f.read()).decode()
-
-    response = model.generate_content([
-        {"mime_type": mime, "data": img_b64},
-        INVOICE_EXTRACTION_PROMPT,
-    ])
+    from google.genai import types
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type=mime),
+            INVOICE_EXTRACTION_PROMPT,
+        ]
+    )
     return parse_invoice_response(response.text)
 
 
@@ -353,11 +313,6 @@ async def extract_invoice(file_path: str) -> List[InvoiceData]:
 
 
 def _suppress_zeros(item: dict) -> dict:
-    """
-    Convert 0 / 0.0 / '0.00' to None for optional charge fields.
-    A zero COD/RTO/Other means the charge doesn't exist — not that it's ₹0.
-    Rule engine skips checks when value is None, preventing false positives.
-    """
     zero_suppressible = {"cod_fee", "rto_fee", "other_surcharges", "fuel_surcharge"}
     for field in zero_suppressible:
         val = item.get(field)
@@ -374,7 +329,7 @@ def _suppress_zeros(item: dict) -> dict:
 def parse_invoice_response(text: str) -> List[InvoiceData]:
     text = text.strip()
     if "```json" in text:
-        text = text.split("```json")[1].split("```")[0]
+        text = text.split("```json").split("```")[1]
     elif "```" in text:
         text = text.split("```")[1].split("```")[0]
     try:
@@ -386,9 +341,7 @@ def parse_invoice_response(text: str) -> List[InvoiceData]:
             try:
                 if not item.get("gst_rate"):
                     item["gst_rate"] = 18.0
-                # ── Zero suppression — prevents false COD/RTO/Other positives ──
                 item = _suppress_zeros(item)
-                # ── Skip rows with no base freight ──
                 base = item.get("base_freight")
                 if base is None or float(base) <= 0:
                     continue
