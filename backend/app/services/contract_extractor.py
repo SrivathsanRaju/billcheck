@@ -41,7 +41,6 @@ CRITICAL:
 - Return ONLY valid JSON, no markdown, no explanation
 """
 
-# Zone name normalization — words → letters
 ZONE_NORMALIZE = {
     "local": "A", "same_city": "A", "city": "A", "metro": "B",
     "regional": "C", "region": "C", "national": "D", "pan_india": "D",
@@ -50,7 +49,6 @@ ZONE_NORMALIZE = {
     "i": "A", "ii": "B", "iii": "C", "iv": "D", "v": "E",
 }
 
-# Contract rate defaults per Indian logistics standards
 DEFAULTS = {
     "cod_rate":           2.5,
     "rto_rate":           50.0,
@@ -58,7 +56,6 @@ DEFAULTS = {
     "gst_pct":            18.0,
 }
 
-# Validation bounds — if Gemini returns outside these, it's wrong
 VALID_BOUNDS = {
     "cod_rate":           (0.1,  15.0),
     "rto_rate":           (5.0,  100.0),
@@ -84,7 +81,6 @@ def _validate_rates(data: dict) -> dict:
             if lo <= val <= hi:
                 data[field] = val
             elif lo <= val * 100 <= hi:
-                # Gemini returned decimal (0.025) instead of percent (2.5)
                 data[field] = round(val * 100, 2)
             else:
                 data[field] = DEFAULTS[field]
@@ -93,24 +89,18 @@ def _validate_rates(data: dict) -> dict:
     return data
 
 
-def _get_gemini_model():
+def _get_gemini_client():
     try:
         from app.core.config import settings
+        from google import genai
         if not settings.GEMINI_API_KEY:
             return None
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        return genai.GenerativeModel("gemini-2.5-flash")
+        return genai.Client(api_key=settings.GEMINI_API_KEY)
     except Exception:
         return None
 
 
 def parse_csv_contract(file_path: str) -> ContractData:
-    """
-    Universal CSV contract parser.
-    Handles structured CSV with sections (FREIGHT RATES / ADDITIONAL CHARGES)
-    and simple flat Zone,Rate,... format.
-    """
     with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
         content = f.read()
 
@@ -119,17 +109,15 @@ def parse_csv_contract(file_path: str) -> ContractData:
     cod_rate = rto_rate = fuel_surcharge_pct = gst_pct = None
     provider = None
 
-    # Try to detect provider from first few lines
     for line in lines[:6]:
         s = line.strip()
         if s and not s.startswith(",") and len(s) > 3:
-            # First non-empty non-csv line is likely provider name
             p = re.split(r'[-–,]', s)[0].strip()
             if p and not any(c.isdigit() for c in p[:4]):
                 provider = p
                 break
 
-    in_freight  = False
+    in_freight = False
     in_surcharge = False
 
     for line in lines:
@@ -138,7 +126,6 @@ def parse_csv_contract(file_path: str) -> ContractData:
             continue
         upper = s.upper()
 
-        # Section detection
         if any(kw in upper for kw in ["FREIGHT RATE", "RATE CARD", "WEIGHT SLAB", "BASE RATE"]):
             in_freight = True
             in_surcharge = False
@@ -148,7 +135,6 @@ def parse_csv_contract(file_path: str) -> ContractData:
             in_surcharge = True
             continue
 
-        # Parse freight slab rows
         if in_freight and s.count(",") >= 3:
             parts = [p.strip() for p in s.split(",")]
             try:
@@ -166,7 +152,6 @@ def parse_csv_contract(file_path: str) -> ContractData:
             except (ValueError, IndexError):
                 pass
 
-        # Parse surcharge rows
         if in_surcharge and "," in s:
             parts = [p.strip() for p in s.split(",")]
             if len(parts) >= 2:
@@ -184,7 +169,6 @@ def parse_csv_contract(file_path: str) -> ContractData:
                 elif any(k in key for k in ["gst", "tax", "igst"]):
                     gst_pct = val
 
-    # Fallback: simple flat CSV format
     if not weight_slabs:
         weight_slabs, cod_rate, rto_rate, fuel_surcharge_pct, gst_pct = _parse_flat_csv(content)
 
@@ -200,7 +184,6 @@ def parse_csv_contract(file_path: str) -> ContractData:
 
 
 def _parse_flat_csv(content: str):
-    """Parse simple flat Zone,Rate,COD%,RTO%,Fuel%,GST% CSV format."""
     import csv, io
     reader = csv.DictReader(io.StringIO(content.strip()))
     weight_slabs = []
@@ -216,14 +199,13 @@ def _parse_flat_csv(content: str):
             continue
         zone = _normalize_zone(zone)
         try:
-            mn  = float(normed.get("min_weight") or normed.get("min") or normed.get("from_weight") or 0)
-            mx  = float(normed.get("max_weight") or normed.get("max") or normed.get("to_weight") or 999)
-            base= float(normed.get("base_rate") or normed.get("rate") or normed.get("base_rate_inr") or 0)
-            pkg = float(normed.get("per_extra_kg") or normed.get("per_kg") or 0)
+            mn   = float(normed.get("min_weight") or normed.get("min") or normed.get("from_weight") or 0)
+            mx   = float(normed.get("max_weight") or normed.get("max") or normed.get("to_weight") or 999)
+            base = float(normed.get("base_rate") or normed.get("rate") or normed.get("base_rate_inr") or 0)
+            pkg  = float(normed.get("per_extra_kg") or normed.get("per_kg") or 0)
             weight_slabs.append({"zone": zone, "min": mn, "max": mx, "base_rate": base, "per_extra_kg": pkg})
         except Exception:
             pass
-        # Pick up surcharge rates if present in same row
         try:
             if normed.get("cod_percentage") or normed.get("cod_rate"):
                 cod_rate = float(normed.get("cod_percentage") or normed.get("cod_rate"))
@@ -240,21 +222,17 @@ def _parse_flat_csv(content: str):
 
 
 def parse_contract_response(text: str) -> ContractData:
-    """Parse and validate Gemini's contract JSON response."""
     text = text.strip()
     if "```json" in text:
-        text = text.split("```json")[1].split("```")[0]
+        text = text.split("```json").split("```")[1]
     elif "```" in text:
         text = text.split("```")[1].split("```")[0]
     try:
         data = json.loads(text)
         data = _validate_rates(data)
-
-        # Normalize zone names in weight slabs
         for slab in data.get("weight_slabs", []):
             if "zone" in slab:
                 slab["zone"] = _normalize_zone(str(slab["zone"]))
-
         data["raw_data"] = data.copy()
         valid_fields = ContractData.model_fields.keys()
         return ContractData(**{k: v for k, v in data.items() if k in valid_fields})
@@ -265,19 +243,16 @@ def parse_contract_response(text: str) -> ContractData:
 async def extract_contract(file_path: str) -> ContractData:
     ext = os.path.splitext(file_path)[1].lower()
 
-    # CSV — always direct parse first, most reliable
     if ext == ".csv":
         result = parse_csv_contract(file_path)
         if result.weight_slabs or result.cod_rate:
             return result
 
-    # PDF — try pdfplumber text extraction first
     if ext == ".pdf":
         try:
             from app.services.pdf_extractor import extract_contract_from_pdf
             result = extract_contract_from_pdf(file_path)
             if result.weight_slabs and len(result.weight_slabs) > 2:
-                # Validate rates even from pdfplumber
                 result.cod_rate           = _validate_rates({"cod_rate": result.cod_rate})["cod_rate"]
                 result.rto_rate           = _validate_rates({"rto_rate": result.rto_rate})["rto_rate"]
                 result.fuel_surcharge_pct = _validate_rates({"fuel_surcharge_pct": result.fuel_surcharge_pct})["fuel_surcharge_pct"]
@@ -286,32 +261,37 @@ async def extract_contract(file_path: str) -> ContractData:
             pass
 
     # Gemini fallback for PDF / image / unknown
-    model = _get_gemini_model()
-    if not model:
+    client = _get_gemini_client()
+    if not client:
         return ContractData(**DEFAULTS)
 
     try:
+        from google.genai import types
+
         if ext == ".pdf":
-            with open(file_path, "rb") as f:
-                pdf_b64 = base64.b64encode(f.read()).decode()
-            response = model.generate_content([
-                {"mime_type": "application/pdf", "data": pdf_b64},
-                CONTRACT_EXTRACTION_PROMPT,
-            ])
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[
+                    types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type="application/pdf"),
+                    CONTRACT_EXTRACTION_PROMPT,
+                ]
+            )
         elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
             mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-            with open(file_path, "rb") as f:
-                img_b64 = base64.b64encode(f.read()).decode()
-            response = model.generate_content([
-                {"mime_type": mime_map.get(ext, "image/jpeg"), "data": img_b64},
-                CONTRACT_EXTRACTION_PROMPT,
-            ])
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[
+                    types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type=mime_map.get(ext, "image/jpeg")),
+                    CONTRACT_EXTRACTION_PROMPT,
+                ]
+            )
         else:
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
-            response = model.generate_content([
-                f"Extract contract data from this logistics rate card:\n\n{text}\n\n{CONTRACT_EXTRACTION_PROMPT}"
-            ])
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=f"Extract contract data from this logistics rate card:\n\n{text}\n\n{CONTRACT_EXTRACTION_PROMPT}"
+            )
 
         result = parse_contract_response(response.text)
         if not result.weight_slabs:
