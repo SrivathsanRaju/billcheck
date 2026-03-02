@@ -329,9 +329,9 @@ def _suppress_zeros(item: dict) -> dict:
 def parse_invoice_response(text: str) -> List[InvoiceData]:
     text = text.strip()
     if "```json" in text:
-        text = text.split("```json").split("```")[1]
+        text = text.split("```json")[1].split("```")[0]
     elif "```" in text:
-        text = text.split("```").split("```")[0]
+        text = text.split("```")[1].split("```")[0]
     try:
         data = json.loads(text)
         if isinstance(data, dict):
