@@ -17,7 +17,6 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
         batch.status = "processing"
         await db.commit()
 
-        # Detect provider from file content
         try:
             with open(invoice_path, "r", encoding="utf-8", errors="replace") as f:
                 raw_text = f.read(8000)
@@ -26,7 +25,6 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
             provider = "Unknown"
         batch.provider_name = provider
 
-        # --- Extract invoices ---
         invoices = await _extract_invoices(invoice_path)
         if not invoices:
             raise ValueError("No invoices could be parsed from the invoice file.")
@@ -34,10 +32,8 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
         batch.total_invoices = len(invoices)
         await db.commit()
 
-        # --- Extract contract ---
         contract = await _extract_contract(contract_path)
 
-        # --- Save invoices to DB ---
         invoice_objs = []
         for inv in invoices:
             db_inv = Invoice(
@@ -47,10 +43,9 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
                 origin_pincode=inv.origin_pincode or "",
                 destination_pincode=inv.destination_pincode or "",
                 weight_billed=inv.weight_billed or 0,
-                actual_weight=inv.actual_weight if inv.actual_weight is not None and inv.actual_weight > 0 else None,
+                # ✅ FIXED: actual_weight removed — not in InvoiceData schema
                 zone=inv.zone or "",
                 base_freight=inv.base_freight or 0,
-                # Preserve None — zero suppression: 0.00 means absent, not ₹0
                 cod_fee=inv.cod_fee if inv.cod_fee is not None and inv.cod_fee > 0 else None,
                 rto_fee=inv.rto_fee if inv.rto_fee is not None and inv.rto_fee > 0 else None,
                 fuel_surcharge=inv.fuel_surcharge if inv.fuel_surcharge is not None and inv.fuel_surcharge > 0 else None,
@@ -64,10 +59,8 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
 
         await db.flush()
 
-        # --- Run rule engine checks ---
         all_discrepancies = _run_checks(invoices, contract)
 
-        # Map awb -> db invoice id
         awb_to_id = {db_inv.awb_number: db_inv.id for _, db_inv in invoice_objs}
 
         for d in all_discrepancies:
@@ -88,7 +81,6 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
 
         await db.flush()
 
-        # --- Summary ---
         total_overcharge = sum(d.overcharge_amount for d in all_discrepancies)
         total_billed = sum(inv.total_billed or 0 for inv in invoices)
         overcharge_rate = (total_overcharge / total_billed * 100) if total_billed > 0 else 0
@@ -128,7 +120,6 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
 
 
 async def _extract_invoices(path: str):
-    """Extract invoices — CSV fast path, PDF/image via Gemini if configured."""
     ext = os.path.splitext(path)[1].lower()
     try:
         if ext == ".csv":
@@ -143,8 +134,7 @@ async def _extract_invoices(path: str):
         else:
             from app.services.invoice_extractor import extract_from_csv
             return await extract_from_csv(path)
-    except Exception as e:
-        # Final fallback to basic CSV parser
+    except Exception:
         from app.services.csv_fast_extractor import parse_invoice_csv
         from app.models.schemas import InvoiceData
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -153,13 +143,11 @@ async def _extract_invoices(path: str):
 
 
 async def _extract_contract(path: str) -> ContractData:
-    """Extract contract — CSV direct parse, PDF/image via Gemini if configured."""
     ext = os.path.splitext(path)[1].lower()
     try:
         from app.services.contract_extractor import extract_contract
         return await extract_contract(path)
     except Exception:
-        # Fallback to basic parser
         from app.services.csv_fast_extractor import parse_contract_csv
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             data = parse_contract_csv(f.read())
@@ -172,7 +160,6 @@ async def _extract_contract(path: str) -> ContractData:
 
 
 def _run_checks(invoices, contract: ContractData):
-    """Run all rule engine checks, handle duplicate AWB across invoices."""
     from app.services.rule_engine import ALL_CHECKS
     from app.models.schemas import DiscrepancyResult
 
@@ -182,7 +169,6 @@ def _run_checks(invoices, contract: ContractData):
     for inv in invoices:
         awb = inv.awb_number
 
-        # Duplicate AWB check
         if awb in awb_seen:
             results.append(DiscrepancyResult(
                 check_type="duplicate_awb",
@@ -197,7 +183,6 @@ def _run_checks(invoices, contract: ContractData):
             ))
         awb_seen[awb] = True
 
-        # Run all rule engine checks
         for check_fn in ALL_CHECKS:
             try:
                 result = check_fn(inv, contract)
