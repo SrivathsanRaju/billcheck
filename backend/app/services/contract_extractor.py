@@ -224,7 +224,7 @@ def _parse_flat_csv(content: str):
 def parse_contract_response(text: str) -> ContractData:
     text = text.strip()
     if "```json" in text:
-        text = text.split("```json").split("```")[1]
+        text = text.split("```json").split("```")[0]
     elif "```" in text:
         text = text.split("```")[1].split("```")[0]
     try:
