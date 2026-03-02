@@ -121,11 +121,22 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
 
 async def _extract_invoices(path: str):
     ext = os.path.splitext(path)[1].lower()
+
+    # Detect by magic bytes if extension missing or wrong
     try:
-        if ext == ".csv":
-            from app.services.invoice_extractor import extract_from_csv
-            return await extract_from_csv(path)
-        elif ext == ".pdf":
+        with open(path, "rb") as f:
+            header = f.read(4)
+        if header.startswith(b"%PDF"):
+            ext = ".pdf"
+        elif header.startswith(b"\xff\xd8\xff"):
+            ext = ".jpg"
+        elif header.startswith(b"\x89PNG"):
+            ext = ".png"
+    except Exception:
+        pass
+
+    try:
+        if ext == ".pdf":
             from app.services.invoice_extractor import extract_from_pdf
             return await extract_from_pdf(path)
         elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
@@ -135,28 +146,50 @@ async def _extract_invoices(path: str):
             from app.services.invoice_extractor import extract_from_csv
             return await extract_from_csv(path)
     except Exception:
-        from app.services.csv_fast_extractor import parse_invoice_csv
-        from app.models.schemas import InvoiceData
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            rows = parse_invoice_csv(f.read())
-        return [InvoiceData(**r) for r in rows if r.get("awb_number")]
+        # Only fallback to CSV parser for actual CSV files
+        if ext == ".csv":
+            from app.services.csv_fast_extractor import parse_invoice_csv
+            from app.models.schemas import InvoiceData
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                rows = parse_invoice_csv(f.read())
+            return [InvoiceData(**r) for r in rows if r.get("awb_number")]
+        raise
+
 
 
 async def _extract_contract(path: str) -> ContractData:
     ext = os.path.splitext(path)[1].lower()
+
+    # Detect by magic bytes
+    try:
+        with open(path, "rb") as f:
+            header = f.read(4)
+        if header.startswith(b"%PDF"):
+            ext = ".pdf"
+        elif header.startswith(b"\xff\xd8\xff"):
+            ext = ".jpg"
+        elif header.startswith(b"\x89PNG"):
+            ext = ".png"
+    except Exception:
+        pass
+
     try:
         from app.services.contract_extractor import extract_contract
         return await extract_contract(path)
     except Exception:
-        from app.services.csv_fast_extractor import parse_contract_csv
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            data = parse_contract_csv(f.read())
-        return ContractData(
-            cod_rate=data.get("cod_percentage", 2.5),
-            rto_rate=data.get("rto_percentage", 50.0),
-            fuel_surcharge_pct=data.get("fuel_surcharge_percentage", 12.0),
-            gst_pct=data.get("gst_percentage", 18.0),
-        )
+        # Only CSV fallback for actual CSV files
+        if ext == ".csv":
+            from app.services.csv_fast_extractor import parse_contract_csv
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                data = parse_contract_csv(f.read())
+            return ContractData(
+                cod_rate=data.get("cod_percentage", 2.5),
+                rto_rate=data.get("rto_percentage", 50.0),
+                fuel_surcharge_pct=data.get("fuel_surcharge_percentage", 12.0),
+                gst_pct=data.get("gst_percentage", 18.0),
+            )
+        raise
+
 
 
 def _run_checks(invoices, contract: ContractData):
