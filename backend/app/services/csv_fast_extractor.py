@@ -2,7 +2,7 @@ import csv
 import io
 import logging
 from typing import List, Optional
-from app.models.schemas import InvoiceData, ContractData, WeightSlab
+from app.models.schemas import InvoiceData, ContractData
 
 logger = logging.getLogger(__name__)
 
@@ -196,13 +196,13 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
                         max_w = _clean_float(get('max_weight'))
 
                         if zone and base_rate is not None and min_w is not None:
-                            weight_slabs.append(WeightSlab(
-                                zone=zone.upper(),
-                                min_weight=min_w,
-                                max_weight=max_w or 999.0,
-                                base_rate=base_rate,
-                                per_kg_rate=_clean_float(get('per_kg_rate')) or 0.0,
-                            ))
+                            weight_slabs.append({
+                                "zone": zone,
+                                "min": min_wt,
+                                "max": max_wt,
+                                "base_rate": base_rate,
+                                "per_extra_kg": per_kg
+                            })
                     break
             except Exception:
                 pass
