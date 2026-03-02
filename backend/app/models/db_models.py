@@ -31,6 +31,7 @@ class Invoice(Base):
     origin_pincode = Column(String, nullable=True)
     destination_pincode = Column(String, nullable=True)
     weight_billed = Column(Float, nullable=True)
+    actual_weight = Column(Float, nullable=True)   
     zone = Column(String, nullable=True)
     base_freight = Column(Float, default=0.0)
     cod_fee = Column(Float, nullable=True, default=None)
