@@ -12,7 +12,6 @@ INVOICE_COL_MAP = {
     "origin_pincode":      ["origin pincode", "origin pin", "from pincode", "source pincode", "origin_pincode"],
     "destination_pincode": ["destination pincode", "dest pincode", "to pincode", "destination_pincode", "dest pin"],
     "weight_billed":       ["weight (kg)", "weight", "billed weight", "weight_billed", "chargeable weight", "charged weight"],
-    "actual_weight":       ["actual weight", "actual_weight", "act weight", "act_weight", "actual wt", "physical weight", "dead weight", "original weight", "declared weight", "measured weight"],
     "zone":                ["zone", "delivery zone", "service zone"],
     "base_freight":        ["base freight (inr)", "base freight", "freight", "base_freight", "basic freight"],
     "cod_fee":             ["cod fee (inr)", "cod fee", "cod", "cod_fee", "cash on delivery"],
@@ -106,7 +105,6 @@ def extract_invoices_from_csv(file_path: str) -> List[InvoiceData]:
             origin_pincode=get('origin_pincode'),
             destination_pincode=get('destination_pincode'),
             weight_billed=_clean_float(get('weight_billed')),
-            actual_weight=_clean_float(get('actual_weight')),
             zone=get('zone'),
             base_freight=_clean_float(get('base_freight')),
             cod_fee=_clean_float(get('cod_fee')),
@@ -190,12 +188,13 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
                             val = row.get(col)
                             return str(val).strip() if val is not None else None
 
-                        zone = get('zone')
+                        zone     = get('zone')
                         base_rate = _clean_float(get('base_rate'))
-                        min_w = _clean_float(get('min_weight'))
-                        max_w = _clean_float(get('max_weight'))
+                        min_wt   = _clean_float(get('min_weight')) or 0
+                        max_wt   = _clean_float(get('max_weight')) or 999999
+                        per_kg   = _clean_float(get('per_kg_rate')) or 0
 
-                        if zone and base_rate is not None and min_w is not None:
+                        if zone and base_rate is not None:
                             weight_slabs.append({
                                 "zone": zone,
                                 "min": min_wt,
@@ -221,9 +220,7 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
     )
 
 
-# Legacy function aliases used by processor.py
 def parse_invoice_csv(content: str) -> list:
-    """Legacy: parse invoice CSV from string content."""
     import tempfile, os
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
         f.write(content)
@@ -236,17 +233,15 @@ def parse_invoice_csv(content: str) -> list:
 
 
 def parse_contract_csv(content: str) -> dict:
-    """Legacy: parse contract CSV from string content."""
     import tempfile, os
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
         f.write(content)
         tmp = f.name
     try:
         contract = extract_contract_from_csv(tmp)
-        # Convert to the dict format expected by discrepancy_engine
         zones = {}
         for slab in contract.weight_slabs:
-            zones[slab.zone] = slab.base_rate
+            zones[slab.get("zone")] = slab.get("base_rate")
         return {
             "zones": zones,
             "cod_percentage": contract.cod_rate or 2.5,
