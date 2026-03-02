@@ -8,7 +8,11 @@ class InvoiceData(BaseModel):
     shipment_date: Optional[str] = None
     origin_pincode: Optional[str] = None
     destination_pincode: Optional[str] = None
-    weight_billed: Optional[float] = None
+    
+    # ✅ ADD THESE TWO WEIGHT FIELDS
+    actual_weight: Optional[float] = None
+    weight_billed: Optional[float] = None      # your existing name
+    
     zone: Optional[str] = None
     base_freight: Optional[float] = None
     cod_fee: Optional[float] = None
@@ -17,6 +21,7 @@ class InvoiceData(BaseModel):
     other_surcharges: Optional[float] = None
     gst_rate: Optional[float] = 18.0
     total_billed: Optional[float] = None
+
 
 
 class ContractData(BaseModel):
