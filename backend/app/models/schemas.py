@@ -10,7 +10,6 @@ class InvoiceData(BaseModel):
     destination_pincode: Optional[str] = None
     
     # ✅ ADD THESE TWO WEIGHT FIELDS
-    actual_weight: Optional[float] = None
     weight_billed: Optional[float] = None      # your existing name
     
     zone: Optional[str] = None
