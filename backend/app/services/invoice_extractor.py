@@ -249,7 +249,7 @@ async def extract_from_csv(file_path: str) -> List[InvoiceData]:
         csv_text = "\n".join(lines[:201])
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         contents=f"Here is a logistics invoice CSV from an Indian logistics provider. Column names may vary by provider.\n\n{csv_text}\n\n{INVOICE_EXTRACTION_PROMPT}"
     )
     return parse_invoice_response(response.text)
@@ -270,7 +270,7 @@ async def extract_from_pdf(file_path: str) -> List[InvoiceData]:
 
     from google.genai import types
     response = client.models.generate_content(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         contents=[
             types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type="application/pdf"),
             INVOICE_EXTRACTION_PROMPT,
@@ -290,7 +290,7 @@ async def extract_from_image(file_path: str) -> List[InvoiceData]:
 
     from google.genai import types
     response = client.models.generate_content(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         contents=[
             types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type=mime),
             INVOICE_EXTRACTION_PROMPT,

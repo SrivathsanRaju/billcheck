@@ -270,7 +270,7 @@ async def extract_contract(file_path: str) -> ContractData:
 
         if ext == ".pdf":
             response = client.models.generate_content(
-                model="gemini-2.5-flash-preview-04-17",
+                model="gemini-2.5-flash",
                 contents=[
                     types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type="application/pdf"),
                     CONTRACT_EXTRACTION_PROMPT,
@@ -279,7 +279,7 @@ async def extract_contract(file_path: str) -> ContractData:
         elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
             mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
             response = client.models.generate_content(
-                model="gemini-2.5-flash-preview-04-17",
+                model="gemini-2.5-flash",
                 contents=[
                     types.Part.from_bytes(data=open(file_path, "rb").read(), mime_type=mime_map.get(ext, "image/jpeg")),
                     CONTRACT_EXTRACTION_PROMPT,
@@ -289,7 +289,7 @@ async def extract_contract(file_path: str) -> ContractData:
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
             response = client.models.generate_content(
-                model="gemini-2.5-flash-preview-04-17",
+                model="gemini-2.5-flash",
                 contents=f"Extract contract data from this logistics rate card:\n\n{text}\n\n{CONTRACT_EXTRACTION_PROMPT}"
             )
 
