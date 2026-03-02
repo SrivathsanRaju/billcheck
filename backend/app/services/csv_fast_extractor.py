@@ -30,14 +30,31 @@ CONTRACT_COL_MAP = {
     "per_kg_rate": ["per extra kg (inr)", "per extra kg", "per_kg_rate", "per kg rate", "extra kg rate"],
 }
 
+# Fees realistically never exceed this — anything above is a misread pincode or junk
+_MAX_FEE = 5000.0
+
+# Keywords that must appear in the header row for it to be treated as the CSV start
+_INVOICE_HEADER_KEYWORDS = {"awb", "shipment", "freight", "weight", "zone", "billed", "cod", "total"}
+
 
 def _clean_float(val) -> Optional[float]:
-    if val is None or str(val).strip() in ('', '-', 'N/A', 'n/a', 'NA'):
+    if val is None or str(val).strip() in ("", "-", "N/A", "n/a", "NA"):
         return None
     try:
-        return float(str(val).replace(',', '').replace('₹', '').replace('INR', '').strip())
+        return float(str(val).replace(",", "").replace("₹", "").replace("INR", "").strip())
     except Exception:
         return None
+
+
+def _safe_fee(val: Optional[float], field: str, awb: str) -> Optional[float]:
+    """Reject fee values that are unrealistically large (likely a misread pincode)."""
+    if val is not None and val > _MAX_FEE:
+        logger.warning(
+            f"AWB {awb}: {field}={val} exceeds max fee threshold ({_MAX_FEE}) "
+            f"— likely a misread pincode, setting to None"
+        )
+        return None
+    return val
 
 
 def _map_headers(headers: List[str], col_map: dict) -> dict:
@@ -51,41 +68,64 @@ def _map_headers(headers: List[str], col_map: dict) -> dict:
     return result
 
 
-def is_csv(file_path: str) -> bool:
-    return file_path.lower().endswith('.csv')
+def _find_csv_start(lines: List[str], keyword_set: set) -> int:
+    """
+    Return the index of the first line that:
+      - has >= 4 commas (likely a CSV row), AND
+      - contains at least one keyword from keyword_set (confirms it is a header row).
+    Falls back to the first line with >= 4 commas if no keyword match is found.
+    """
+    fallback = None
+    for i, line in enumerate(lines):
+        if line.count(",") >= 4:
+            if fallback is None:
+                fallback = i
+            if any(kw in line.lower() for kw in keyword_set):
+                return i
+    return fallback or 0
 
+
+def is_csv(file_path: str) -> bool:
+    return file_path.lower().endswith(".csv")
+
+
+# ---------------------------------------------------------------------------
+# Invoice extractor
+# ---------------------------------------------------------------------------
 
 def extract_invoices_from_csv(file_path: str) -> List[InvoiceData]:
-    with open(file_path, 'r', encoding='utf-8-sig', errors='replace') as f:
+    with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
         content = f.read()
 
     lines = content.splitlines()
-    csv_start = 0
-    for i, line in enumerate(lines):
-        if line.count(',') >= 4:
-            csv_start = i
-            break
+    csv_start = _find_csv_start(lines, _INVOICE_HEADER_KEYWORDS)
 
-    csv_content = '\n'.join(lines[csv_start:])
+    csv_content = "\n".join(lines[csv_start:])
     reader = csv.DictReader(io.StringIO(csv_content))
-    headers = reader.fieldnames or []
+
+    # Strip None / empty / whitespace-only keys produced by trailing commas
+    headers = [h for h in (reader.fieldnames or []) if h and h.strip()]
+    logger.info(f"CSV invoice: detected headers = {headers}")
 
     if not headers:
         raise ValueError("No headers found in CSV")
 
-    mapping = _map_headers([h for h in headers if h], INVOICE_COL_MAP)
-    logger.info(f"CSV fast extract: mapped fields = {list(mapping.keys())}")
+    mapping = _map_headers(headers, INVOICE_COL_MAP)
+    logger.info(f"CSV invoice: mapped fields = {list(mapping.keys())}")
 
-    if 'awb_number' not in mapping and 'total_billed' not in mapping:
+    if "awb_number" not in mapping and "total_billed" not in mapping:
         raise ValueError("CSV doesn't look like an invoice — missing AWB or total columns")
 
     invoices = []
     for row in reader:
+        # Skip completely empty rows
         values = [str(v).strip() for v in row.values() if v]
-        if not values or all(v in ('', '-') for v in values):
+        if not values or all(v in ("", "-") for v in values):
             continue
-        first_val = (list(row.values())[0] or '').strip().lower()
-        if any(kw in first_val for kw in ['total', 'note', 'logistics', 'invoice', 'provider', 'date:']):
+
+        # Skip footer / metadata rows
+        first_val = (list(row.values())[0] or "").strip().lower()
+        if any(kw in first_val for kw in ["total", "note", "logistics", "invoice", "provider", "date:"]):
             continue
 
         def get(field):
@@ -95,40 +135,51 @@ def extract_invoices_from_csv(file_path: str) -> List[InvoiceData]:
             val = row.get(col)
             return str(val).strip() if val is not None else None
 
-        awb = get('awb_number')
-        if not awb or awb.lower() in ('awb number', 'awb', ''):
+        awb = get("awb_number")
+        if not awb or awb.lower() in ("awb number", "awb", ""):
             continue
+
+        # Parse numeric fee fields with pincode-misread guard
+        base  = _safe_fee(_clean_float(get("base_freight")),     "base_freight",     awb)
+        cod   = _safe_fee(_clean_float(get("cod_fee")),          "cod_fee",          awb)
+        rto   = _safe_fee(_clean_float(get("rto_fee")),          "rto_fee",          awb)
+        fuel  = _safe_fee(_clean_float(get("fuel_surcharge")),   "fuel_surcharge",   awb)
+        other = _safe_fee(_clean_float(get("other_surcharges")), "other_surcharges", awb)
 
         invoices.append(InvoiceData(
             awb_number=awb,
-            shipment_date=get('shipment_date'),
-            origin_pincode=get('origin_pincode'),
-            destination_pincode=get('destination_pincode'),
-            weight_billed=_clean_float(get('weight_billed')),
-            zone=get('zone'),
-            base_freight=_clean_float(get('base_freight')),
-            cod_fee=_clean_float(get('cod_fee')),
-            rto_fee=_clean_float(get('rto_fee')),
-            fuel_surcharge=_clean_float(get('fuel_surcharge')),
-            other_surcharges=_clean_float(get('other_surcharges')),
-            gst_rate=_clean_float(get('gst_rate')) or 18.0,
-            total_billed=_clean_float(get('total_billed')),
+            shipment_date=get("shipment_date"),
+            origin_pincode=get("origin_pincode"),
+            destination_pincode=get("destination_pincode"),
+            weight_billed=_clean_float(get("weight_billed")),
+            zone=get("zone"),
+            base_freight=base,
+            cod_fee=cod,
+            rto_fee=rto,
+            fuel_surcharge=fuel,
+            other_surcharges=other,
+            gst_rate=_clean_float(get("gst_rate")) or 18.0,
+            total_billed=_clean_float(get("total_billed")),
         ))
 
-    logger.info(f"CSV fast extract: {len(invoices)} invoices parsed")
+    logger.info(f"CSV invoice: {len(invoices)} invoices parsed")
     return invoices
 
 
+# ---------------------------------------------------------------------------
+# Contract extractor
+# ---------------------------------------------------------------------------
+
 def extract_contract_from_csv(file_path: str) -> ContractData:
-    with open(file_path, 'r', encoding='utf-8-sig', errors='replace') as f:
+    with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
         content = f.read()
 
-    weight_slabs = []
-    cod_rate = None
+    weight_slabs  = []
+    cod_rate      = None
     cod_rate_type = "percentage"
-    rto_rate = None
-    fuel_pct = None
-    gst_pct = 18.0
+    rto_rate      = None
+    fuel_pct      = None
+    gst_pct       = 18.0
 
     lines = content.splitlines()
     i = 0
@@ -139,47 +190,50 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
             continue
         line_lower = line.lower()
 
-        if 'cod_rate' in line_lower or ('cod' in line_lower and 'rate' in line_lower):
-            for p in line.split(','):
+        if "cod_rate" in line_lower or ("cod" in line_lower and "rate" in line_lower):
+            for p in line.split(","):
                 try:
                     cod_rate = float(p.strip())
                     break
                 except Exception:
                     pass
-            if 'fixed' in line_lower:
-                cod_rate_type = 'fixed'
+            if "fixed" in line_lower:
+                cod_rate_type = "fixed"
 
-        elif 'rto_rate' in line_lower or ('rto' in line_lower and 'rate' in line_lower):
-            for p in line.split(','):
+        elif "rto_rate" in line_lower or ("rto" in line_lower and "rate" in line_lower):
+            for p in line.split(","):
                 try:
                     rto_rate = float(p.strip())
                     break
                 except Exception:
                     pass
 
-        elif 'fuel' in line_lower and ('pct' in line_lower or 'surcharge' in line_lower or '%' in line_lower):
-            for p in line.split(','):
+        elif "fuel" in line_lower and ("pct" in line_lower or "surcharge" in line_lower or "%" in line_lower):
+            for p in line.split(","):
                 try:
                     fuel_pct = float(p.strip())
                     break
                 except Exception:
                     pass
 
-        elif 'gst' in line_lower and ('pct' in line_lower or '%' in line_lower or 'rate' in line_lower):
-            for p in line.split(','):
+        elif "gst" in line_lower and ("pct" in line_lower or "%" in line_lower or "rate" in line_lower):
+            for p in line.split(","):
                 try:
                     gst_pct = float(p.strip())
                     break
                 except Exception:
                     pass
 
-        elif line.count(',') >= 3:
+        elif line.count(",") >= 3:
             try:
-                reader = csv.DictReader(io.StringIO('\n'.join(lines[i:])))
-                headers = [h for h in (reader.fieldnames or []) if h]
+                reader = csv.DictReader(io.StringIO("\n".join(lines[i:])))
+                headers = [h for h in (reader.fieldnames or []) if h and h.strip()]
                 mapping = _map_headers(headers, CONTRACT_COL_MAP)
 
-                if 'zone' in mapping and 'base_rate' in mapping:
+                logger.info(f"CSV contract: detected headers = {headers}")
+                logger.info(f"CSV contract: mapped fields = {list(mapping.keys())}")
+
+                if "zone" in mapping and "base_rate" in mapping:
                     for row in reader:
                         def get(field):
                             col = mapping.get(field)
@@ -188,19 +242,19 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
                             val = row.get(col)
                             return str(val).strip() if val is not None else None
 
-                        zone     = get('zone')
-                        base_rate = _clean_float(get('base_rate'))
-                        min_wt   = _clean_float(get('min_weight')) or 0
-                        max_wt   = _clean_float(get('max_weight')) or 999999
-                        per_kg   = _clean_float(get('per_kg_rate')) or 0
+                        zone      = get("zone")
+                        base_rate = _clean_float(get("base_rate"))
+                        min_wt    = _clean_float(get("min_weight")) or 0
+                        max_wt    = _clean_float(get("max_weight")) or 999999
+                        per_kg    = _clean_float(get("per_kg_rate")) or 0
 
                         if zone and base_rate is not None:
                             weight_slabs.append({
-                                "zone": zone,
-                                "min": min_wt,
-                                "max": max_wt,
-                                "base_rate": base_rate,
-                                "per_extra_kg": per_kg
+                                "zone":         zone,
+                                "min":          min_wt,
+                                "max":          max_wt,
+                                "base_rate":    base_rate,
+                                "per_extra_kg": per_kg,
                             })
                     break
             except Exception:
@@ -208,7 +262,10 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
 
         i += 1
 
-    logger.info(f"CSV contract: {len(weight_slabs)} slabs, COD={cod_rate}, fuel={fuel_pct}, GST={gst_pct}")
+    logger.info(
+        f"CSV contract: {len(weight_slabs)} slabs, COD={cod_rate}, "
+        f"RTO={rto_rate}, fuel={fuel_pct}, GST={gst_pct}"
+    )
 
     return ContractData(
         weight_slabs=weight_slabs,
@@ -220,9 +277,13 @@ def extract_contract_from_csv(file_path: str) -> ContractData:
     )
 
 
+# ---------------------------------------------------------------------------
+# Public helpers (used by the API layer)
+# ---------------------------------------------------------------------------
+
 def parse_invoice_csv(content: str) -> list:
     import tempfile, os
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8") as f:
         f.write(content)
         tmp = f.name
     try:
@@ -234,21 +295,19 @@ def parse_invoice_csv(content: str) -> list:
 
 def parse_contract_csv(content: str) -> dict:
     import tempfile, os
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8") as f:
         f.write(content)
         tmp = f.name
     try:
         contract = extract_contract_from_csv(tmp)
-        zones = {}
-        for slab in contract.weight_slabs:
-            zones[slab.get("zone")] = slab.get("base_rate")
+        zones = {slab.get("zone"): slab.get("base_rate") for slab in contract.weight_slabs}
         return {
-            "zones": zones,
-            "cod_percentage": contract.cod_rate or 2.5,
-            "rto_percentage": contract.rto_rate or 50.0,
+            "zones":                     zones,
+            "cod_percentage":            contract.cod_rate or 2.5,
+            "rto_percentage":            contract.rto_rate or 50.0,
             "fuel_surcharge_percentage": contract.fuel_surcharge_pct or 12.0,
-            "gst_percentage": contract.gst_pct,
-            "contracted_surcharges": [],
+            "gst_percentage":            contract.gst_pct,
+            "contracted_surcharges":     [],
         }
     finally:
         os.unlink(tmp)
