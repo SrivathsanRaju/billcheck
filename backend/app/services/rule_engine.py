@@ -245,11 +245,46 @@ def check_non_contracted_surcharge(invoice: InvoiceData, contract: ContractData)
     )
 
 
-# ─── 5 checks — weight overcharge removed ─────────────────────────────
+def check_weight_overcharge(invoice: InvoiceData, contract: ContractData) -> Optional[DiscrepancyResult]:
+    """Flags when billed weight exceeds actual weight by more than 0.5 kg tolerance."""
+    billed = invoice.weight_billed
+    actual = invoice.actual_weight
+    if billed is None or actual is None:
+        return None
+    padding = billed - actual
+    if padding <= 0.5:
+        return None
+    gst        = _gst_multiplier(contract)
+    # Estimate overcharge: padding × per_kg_rate from matching slab
+    zone = invoice.zone or "A"
+    slab = next(
+        (s for s in contract.weight_slabs
+         if s.get("zone", "A") == zone and s.get("min_weight", 0) <= actual <= s.get("max_weight", 9999)),
+        None,
+    )
+    per_kg = float(slab.get("per_kg_rate", 0)) if slab else 0.0
+    overcharge = round(padding * per_kg * gst, 2)
+    return DiscrepancyResult(
+        check_type="weight_overcharge",
+        severity="high",
+        description=(
+            f"Weight padding: billed {billed:.2f} kg vs actual {actual:.2f} kg "
+            f"(+{padding:.2f} kg excess, est. overcharge incl. GST = ₹{overcharge:.2f})"
+        ),
+        billed_value=billed,
+        expected_value=actual,
+        overcharge_amount=overcharge,
+        confidence_score=0.97,
+        confidence_reason="Billed weight exceeds declared/physical weight by more than 0.5 kg tolerance.",
+    )
+
+
+# ─── 6 checks ─────────────────────────────────────────────────────────
 ALL_CHECKS = [
     check_base_freight,
     check_fuel_surcharge,
     check_rto,
     check_cod,
     check_non_contracted_surcharge,
+    check_weight_overcharge,
 ]

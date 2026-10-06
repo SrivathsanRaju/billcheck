@@ -9,9 +9,9 @@ class InvoiceData(BaseModel):
     origin_pincode: Optional[str] = None
     destination_pincode: Optional[str] = None
     
-    # ✅ ADD THESE TWO WEIGHT FIELDS
-    weight_billed: Optional[float] = None      # your existing name
-    
+    weight_billed: Optional[float] = None
+    actual_weight: Optional[float] = None      # physical/declared weight for overcharge check
+
     zone: Optional[str] = None
     base_freight: Optional[float] = None
     cod_fee: Optional[float] = None
