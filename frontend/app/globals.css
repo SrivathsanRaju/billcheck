@@ -326,6 +326,12 @@ body {
   .section-title { font-size: 15px; }
 }
 
+/* ── Shimmer animation for skeleton loaders ── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ── Phone (≤ 480px) ── */
 @media (max-width: 480px) {
   main { padding: 68px 12px 40px !important; }

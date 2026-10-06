@@ -255,14 +255,15 @@ def check_weight_overcharge(invoice: InvoiceData, contract: ContractData) -> Opt
     if padding <= 0.5:
         return None
     gst        = _gst_multiplier(contract)
-    # Estimate overcharge: padding × per_kg_rate from matching slab
-    zone = invoice.zone or "A"
+    # Estimate overcharge: padding × per_extra_kg rate from matching slab
+    zone = _normalize_zone(invoice.zone or "A")
     slab = next(
         (s for s in contract.weight_slabs
-         if s.get("zone", "A") == zone and s.get("min_weight", 0) <= actual <= s.get("max_weight", 9999)),
+         if _normalize_zone(str(s.get("zone", "A"))) == zone
+         and float(s.get("min", 0)) <= actual <= float(s.get("max", 9999))),
         None,
     )
-    per_kg = float(slab.get("per_kg_rate", 0)) if slab else 0.0
+    per_kg = float(slab.get("per_extra_kg", 0)) if slab else 0.0
     overcharge = round(padding * per_kg * gst, 2)
     return DiscrepancyResult(
         check_type="weight_overcharge",

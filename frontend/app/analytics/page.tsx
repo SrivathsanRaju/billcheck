@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { getAnalytics, formatINR } from '@/lib/api';
 import KPICard from '@/components/KPICard';
+import { KPIGridSkeleton, TableSkeleton, ChartSkeleton } from '@/components/Skeleton';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -61,11 +62,25 @@ function formatMonth(m: string) {
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<any>(null);
-  useEffect(()=>{ getAnalytics().then(r=>setData(r.data)).catch(()=>{}); },[]);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{ getAnalytics().then(r=>setData(r.data)).catch(()=>{}).finally(()=>setLoading(false)); },[]);
+
+  if (loading) return (
+    <div className="fade-in">
+      <div className="page-header"><h1 className="page-title">Analytics</h1></div>
+      <KPIGridSkeleton count={4} />
+      <div style={{marginTop:20}}><KPIGridSkeleton count={4} /></div>
+      <div className="card" style={{marginTop:20,padding:20,height:260}}><ChartSkeleton height={220} /></div>
+      <div className="kpi-grid-2" style={{marginTop:20}}>
+        <div className="card" style={{padding:20,height:280}}><ChartSkeleton height={240} /></div>
+        <div className="card" style={{padding:20,height:280}}><ChartSkeleton height={240} /></div>
+      </div>
+    </div>
+  );
 
   if (!data) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,color:'var(--text-dim)',fontFamily:'var(--font-mono)',fontSize:12}}>
-      Loading analytics…
+      No analytics data
     </div>
   );
 

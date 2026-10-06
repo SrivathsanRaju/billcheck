@@ -23,12 +23,13 @@ def build_analytics(batches: List[Any], all_discrepancies: List[Any]) -> Dict:
     avg_overcharge_rate = (total_overcharge / total_billed * 100) if total_billed > 0 else 0
 
     # Monthly trends
-    monthly: Dict[str, Dict] = defaultdict(lambda: {"invoices": 0, "overcharge": 0, "discrepancies": 0})
+    monthly: Dict[str, Dict] = defaultdict(lambda: {"invoices": 0, "overcharge": 0, "billed": 0, "discrepancies": 0})
     for b in batches:
         month = b.created_at.strftime("%Y-%m")
         monthly[month]["invoices"] += b.total_invoices
         summary = b.summary or {}
         monthly[month]["overcharge"] += summary.get("total_overcharge", 0)
+        monthly[month]["billed"] += summary.get("total_billed", 0)
     for d in all_discrepancies:
         # find batch month
         for b in batches:

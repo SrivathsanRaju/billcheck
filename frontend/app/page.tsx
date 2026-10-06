@@ -3,14 +3,18 @@ import { useEffect, useState } from 'react';
 import { listBatches, getAnalytics, formatINR } from '@/lib/api';
 import { StatusBadge } from '@/components/Badges';
 import KPICard from '@/components/KPICard';
+import { KPIGridSkeleton, TableSkeleton, ChartSkeleton } from '@/components/Skeleton';
 import Link from 'next/link';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from 'recharts';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, AreaChart, Area
+} from 'recharts';
 
-const COLORS = ['#F57921','#6B4DB0','#00C48C','#FF4757','#FFB547','#8B6DC4','#00E5A8'];
-const CL: Record<string,string> = {
-  rate_deviation:'Rate Dev', fuel_surcharge_mismatch:'Fuel', cod_fee_mismatch:'COD',
-  rto_overcharge:'RTO', non_contracted_surcharge:'Unlisted', gst_miscalculation:'GST',
-  arithmetic_total_mismatch:'Arithmetic', duplicate_awb:'Duplicate',
+const COLORS = ['#F57921', '#6B4DB0', '#00C48C', '#FF4757', '#FFB547', '#8B6DC4', '#00E5A8'];
+const CL: Record<string, string> = {
+  rate_deviation: 'Rate Dev', fuel_surcharge_mismatch: 'Fuel', cod_fee_mismatch: 'COD',
+  rto_overcharge: 'RTO', non_contracted_surcharge: 'Unlisted', gst_miscalculation: 'GST',
+  arithmetic_total_mismatch: 'Arithmetic', duplicate_awb: 'Duplicate', weight_overcharge: 'Weight Pad',
 };
 
 const Tip = ({ active, payload, label }: any) => {
@@ -35,14 +39,16 @@ const AlertIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 export default function OverviewPage() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [batches, setBatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    listBatches().then(r => {
-      // Handle both paginated {items:[...]} and legacy flat array
-      const list = Array.isArray(r.data) ? r.data : (r.data.items || []);
-      setBatches(list.slice(0, 6));
-    }).catch(() => {});
-    getAnalytics().then(r => setAnalytics(r.data)).catch(() => {});
+    Promise.all([
+      listBatches().then(r => {
+        const list = Array.isArray(r.data) ? r.data : (r.data.items || []);
+        setBatches(list.slice(0, 6));
+      }).catch(() => {}),
+      getAnalytics().then(r => setAnalytics(r.data)).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, []);
 
   const a = analytics;
@@ -56,7 +62,6 @@ export default function OverviewPage() {
   const barData = (a?.check_type_totals || []).map((c: any) => ({
     name: CL[c.check_type] || c.check_type, overcharge: Math.round(c.overcharge),
   }));
-  // Monthly trend from analytics (reliable) with per-batch fallback
   const monthlyTrend = (a?.monthly_trends || []).map((m: any) => ({
     name: new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
     overcharge: Math.round(m.overcharge || 0),
@@ -65,6 +70,16 @@ export default function OverviewPage() {
     name: `#${b.id}`, overcharge: Math.round(b.summary?.total_overcharge || 0),
   }));
   const trendData = monthlyTrend.length > 0 ? monthlyTrend : batchTrend;
+
+  // Compute MoM trend for rate if we have ≥2 months
+  const trend = (() => {
+    if (monthlyTrend.length >= 2) {
+      const prev = monthlyTrend[monthlyTrend.length - 2].overcharge;
+      const curr = monthlyTrend[monthlyTrend.length - 1].overcharge;
+      if (prev > 0) return ((curr - prev) / prev) * 100;
+    }
+    return undefined;
+  })();
 
   return (
     <div className="fade-in">
@@ -81,47 +96,60 @@ export default function OverviewPage() {
         </Link>
       </div>
 
-      <div className="kpi-grid-4">
-        <KPICard label="Total Recoverable" value={a ? formatINR(a.total_overcharge) : '₹0'} sub={`${a?.total_batches ?? 0} audit runs`} accent="orange" icon={<CoinIcon />} />
-        <KPICard label="Overcharge Rate" value={a ? `${rate}%` : '0%'} sub="of total billed" accent={rate > 10 ? 'red' : rate > 5 ? 'amber' : 'green'} icon={<TrendIcon />} />
-        <KPICard label="Avg / Invoice" value={a ? formatINR(avgPerInv) : '₹0'} sub="extra per shipment" accent="red" icon={<AlertIcon />} />
-        <KPICard label="Invoices Audited" value={a?.total_invoices ?? 0} sub={`${totalDisc} violations`} accent="blue" icon={<TruckIcon />} />
-      </div>
+      {loading ? (
+        <KPIGridSkeleton count={4} />
+      ) : (
+        <div className="kpi-grid-4">
+          <KPICard label="Total Recoverable" value={a ? formatINR(a.total_overcharge) : '₹0'} sub={`${a?.total_batches ?? 0} audit runs`} accent="orange" icon={<CoinIcon />} trend={trend} trendLabel="MoM" />
+          <KPICard label="Overcharge Rate" value={a ? `${rate}%` : '0%'} sub="of total billed" accent={rate > 10 ? 'red' : rate > 5 ? 'amber' : 'green'} icon={<TrendIcon />} />
+          <KPICard label="Avg / Invoice" value={a ? formatINR(avgPerInv) : '₹0'} sub="extra per shipment" accent="red" icon={<AlertIcon />} />
+          <KPICard label="Invoices Audited" value={a?.total_invoices ?? 0} sub={`${totalDisc} violations`} accent="blue" icon={<TruckIcon />} />
+        </div>
+      )}
 
       <div className="kpi-grid-2">
         {/* Area trend */}
         <div className="card" style={{ padding: '20px 20px 16px' }}>
           <div style={{ marginBottom: 16 }}>
             <div className="section-title">Overcharge Trend</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Per batch across recent audits</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              {monthlyTrend.length > 0 ? 'Monthly overcharge totals' : 'Per batch across recent audits'}
+            </div>
           </div>
-          {trendData.length > 0 || (a && a.total_batches > 0) ? (
+          {loading ? (
+            <ChartSkeleton height={190} />
+          ) : trendData.length > 0 ? (
             <ResponsiveContainer width="100%" height={190}>
               <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
                 <defs>
                   <linearGradient id="orangeArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F57921" stopOpacity={0.2} />
+                    <stop offset="5%" stopColor="#F57921" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#F57921" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 6" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 13, fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+                <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
                 <Tooltip content={<Tip />} cursor={{ stroke: 'var(--border-2)', strokeWidth: 1 }} />
-                <Area type="monotone" dataKey="overcharge" stroke="#F57921" strokeWidth={2.5} fill="url(#orangeArea)" dot={{ fill: '#F57921', strokeWidth: 0, r: 4 }} activeDot={{ r: 6, fill: '#F57921' }} />
+                <Area type="monotone" dataKey="overcharge" stroke="#F57921" strokeWidth={2.5} fill="url(#orangeArea)" dot={{ fill: '#F57921', strokeWidth: 0, r: 3 }} activeDot={{ r: 6, fill: '#F57921', strokeWidth: 0 }} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}><div className="empty-sub">Chart data loading…</div></div>
+            <div className="empty-state" style={{ padding: 40 }}>
+              <div className="empty-icon" style={{ fontSize: 28 }}>📈</div>
+              <div className="empty-sub">Chart will populate after first audit</div>
+            </div>
           )}
         </div>
 
         {/* Donut */}
-        <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', padding: '20px 20px 16px' }}>
+        <div className="card" style={{ padding: '20px 20px 16px' }}>
           <div style={{ marginBottom: 16 }}>
             <div className="section-title">Violation Distribution</div>
           </div>
-          {pieData.length > 0 ? (
+          {loading ? (
+            <ChartSkeleton height={190} />
+          ) : pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={190}>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="46%" innerRadius={50} outerRadius={76} dataKey="value" paddingAngle={3}>
@@ -131,35 +159,32 @@ export default function OverviewPage() {
                   if (!active || !payload?.length) return null;
                   const d = payload[0];
                   return (
-                    <div style={{
-                      background: 'rgba(13,15,26,0.92)',
-                      border: `1px solid ${d.payload.fill}66`,
-                      borderRadius: 10,
-                      padding: '9px 14px',
-                      backdropFilter: 'blur(16px)',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                    }}>
+                    <div style={{ background: 'rgba(13,15,26,0.95)', border: `1px solid ${d.payload.fill}66`, borderRadius: 10, padding: '9px 14px', backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#F0F2FF', marginBottom: 3 }}>{d.name}</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: d.payload.fill, fontFamily: 'monospace' }}>{formatINR(d.value)}</div>
                     </div>
                   );
                 }} />
-                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 13, color: '#C5CADF' }} />
+                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 12, color: '#C5CADF' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}><div style={{ fontSize: 14, color: 'var(--text-muted)' }}>No data yet</div></div>
+            <div className="empty-state" style={{ padding: 40 }}>
+              <div className="empty-icon" style={{ fontSize: 28 }}>🍩</div>
+              <div className="empty-sub">Distribution appears after first audit</div>
+            </div>
           )}
         </div>
       </div>
 
       {/* Horizontal bar */}
-      {barData.length > 0 && (
+      {!loading && barData.length > 0 && (
         <div className="card" style={{ padding: '20px 20px 16px', marginBottom: 20 }}>
           <div style={{ marginBottom: 16 }}>
-            <div className="section-title">Check Frequency vs Financial Impact</div>
+            <div className="section-title">Financial Impact by Check Type</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Overcharge amount per violation category</div>
           </div>
-          <ResponsiveContainer width="100%" height={160}>
+          <ResponsiveContainer width="100%" height={Math.max(130, barData.length * 34)}>
             <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 60 }}>
               <defs>
                 <linearGradient id="blueOrangeGrad" x1="0" y1="0" x2="1" y2="0">
@@ -167,9 +192,9 @@ export default function OverviewPage() {
                   <stop offset="100%" stopColor="#6B4DB0" />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 6" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 12, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fill: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }} width={90} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 6" horizontal={false} stroke="rgba(255,255,255,0.04)" />
+              <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }} width={86} axisLine={false} tickLine={false} />
               <Tooltip content={<Tip />} cursor={{ fill: 'rgba(71,47,145,0.08)' }} />
               <Bar dataKey="overcharge" fill="url(#blueOrangeGrad)" radius={[0, 6, 6, 0]} />
             </BarChart>
@@ -185,7 +210,9 @@ export default function OverviewPage() {
           </div>
           <Link href="/batches" className="btn btn-ghost btn-sm">View all →</Link>
         </div>
-        {batches.length === 0 ? (
+        {loading ? (
+          <TableSkeleton rows={4} cols={7} />
+        ) : batches.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📦</div>
             <div className="empty-title">No audits yet</div>
@@ -193,26 +220,30 @@ export default function OverviewPage() {
             <Link href="/upload" className="btn btn-primary" style={{ marginTop: 14 }}>Start first audit</Link>
           </div>
         ) : (
-          <div className="table-scroll-wrapper"><table className="data-table">
-            <thead><tr>
-              <th>Batch</th><th>Provider</th><th>Status</th>
-              <th className="right">Invoices</th><th className="right">Violations</th>
-              <th className="right">Overcharge</th><th>Date</th>
-            </tr></thead>
-            <tbody>
-              {batches.map((b: any) => (
-                <tr key={b.id}>
-                  <td><Link href={`/batches/${b.id}`} className="mono" style={{ color: 'var(--orange)', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>#{b.id}</Link></td>
-                  <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{b.provider_name || '—'}</td>
-                  <td><StatusBadge status={b.status} /></td>
-                  <td className="right"><span className="mono" style={{ fontSize: 12 }}>{b.total_invoices}</span></td>
-                  <td className="right"><span className="mono" style={{ fontSize: 14, fontWeight: 700, color: b.summary?.total_discrepancies > 0 ? 'var(--red)' : 'var(--text-dim)' }}>{b.summary?.total_discrepancies ?? '—'}</span></td>
-                  <td className="right"><span className="mono" style={{ fontSize: 14, fontWeight: 700, color: b.summary?.total_overcharge > 0 ? 'var(--orange)' : 'var(--text-dim)' }}>{b.summary ? formatINR(b.summary.total_overcharge) : '—'}</span></td>
-                  <td><span className="mono" style={{ fontSize: 13, color: 'var(--text-muted)' }}>{new Date(b.created_at).toLocaleDateString('en-IN')}</span></td>
+          <div className="table-scroll-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Batch</th><th>Provider</th><th>Status</th>
+                  <th className="right">Invoices</th><th className="right">Violations</th>
+                  <th className="right">Overcharge</th><th>Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table></div>
+              </thead>
+              <tbody>
+                {batches.map((b: any) => (
+                  <tr key={b.id}>
+                    <td><Link href={`/batches/${b.id}`} className="mono" style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>#{b.id}</Link></td>
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>{b.provider_name || '—'}</td>
+                    <td><StatusBadge status={b.status} /></td>
+                    <td className="right"><span className="mono" style={{ fontSize: 12 }}>{b.total_invoices}</span></td>
+                    <td className="right"><span className="mono" style={{ fontSize: 13, fontWeight: 700, color: b.summary?.total_discrepancies > 0 ? 'var(--red)' : 'var(--text-dim)' }}>{b.summary?.total_discrepancies ?? '—'}</span></td>
+                    <td className="right"><span className="mono" style={{ fontSize: 13, fontWeight: 700, color: b.summary?.total_overcharge > 0 ? 'var(--orange)' : 'var(--text-dim)' }}>{b.summary ? formatINR(b.summary.total_overcharge) : '—'}</span></td>
+                    <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(b.created_at).toLocaleDateString('en-IN')}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

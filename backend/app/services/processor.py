@@ -43,7 +43,7 @@ async def process_batch(batch_id: int, invoice_path: str, contract_path: str, db
                 origin_pincode=inv.origin_pincode or "",
                 destination_pincode=inv.destination_pincode or "",
                 weight_billed=inv.weight_billed or 0,
-                # ✅ FIXED: actual_weight removed — not in InvoiceData schema
+                actual_weight=inv.actual_weight,   # declared/physical weight for overcharge check
                 zone=inv.zone or "",
                 base_freight=inv.base_freight or 0,
                 cod_fee=inv.cod_fee if inv.cod_fee is not None and inv.cod_fee > 0 else None,
