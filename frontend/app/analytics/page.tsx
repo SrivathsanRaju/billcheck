@@ -79,8 +79,13 @@ export default function AnalyticsPage() {
   );
 
   if (!data) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,color:'var(--text-dim)',fontFamily:'var(--font-mono)',fontSize:12}}>
-      No analytics data
+    <div className="fade-in">
+      <div className="page-header"><h1 className="page-title">Analytics</h1></div>
+      <div className="card" style={{padding:40, textAlign:'center'}}>
+        <div style={{fontSize:36,marginBottom:16}}>📊</div>
+        <div style={{fontWeight:700,fontSize:16,color:'var(--text-primary)',marginBottom:8}}>No analytics data yet</div>
+        <div style={{fontSize:13,color:'var(--text-muted)'}}>Upload and process at least one invoice batch to see analytics here.</div>
+      </div>
     </div>
   );
 
@@ -121,7 +126,7 @@ export default function AnalyticsPage() {
         <KPICard label="Avg / Batch"   value={formatINR(avgPerBatch)} sub="per audit run"/>
         <KPICard label="Top Violation" value={top?(CL[top.check_type]||top.check_type):'—'} sub={top?`${formatINR(top.overcharge)} · ${top.count} hits`:'no data'} accent="red"/>
         <KPICard label="Highest Risk"  value={topProv?.provider||'—'} sub={topProv?formatINR(topProv.overcharge):'no data'} accent="amber"/>
-        <KPICard label="Checks Active" value={`${data.check_type_totals?.length??0} / 6`} sub="violation categories"/>
+        <KPICard label="Checks Active" value={`${data.check_type_totals?.length??0} / 7`} sub="violation categories"/>
       </div>
 
       {/* Monthly trend — only show if data exists */}
