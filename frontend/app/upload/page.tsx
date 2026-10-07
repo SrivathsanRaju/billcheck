@@ -47,10 +47,9 @@ function AuditingSpinner({ step }: { step: number }) {
       <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 8 }}>
         Auditing in progress
       </div>
-      <div style={{
+      <div key={step} style={{
         fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--orange)',
         animation: 'fadeInUp 0.4s ease',
-        key: step,
       }}>
         {AUDIT_STEPS[step % AUDIT_STEPS.length]}
       </div>
