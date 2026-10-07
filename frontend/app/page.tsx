@@ -128,8 +128,8 @@ export default function OverviewPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
                 <Tooltip content={<Tip />} cursor={{ stroke: 'var(--border-2)', strokeWidth: 1 }} />
                 <Area type="monotone" dataKey="overcharge" stroke="#F57921" strokeWidth={2.5} fill="url(#orangeArea)" dot={{ fill: '#F57921', strokeWidth: 0, r: 3 }} activeDot={{ r: 6, fill: '#F57921', strokeWidth: 0 }} />
               </AreaChart>
@@ -193,8 +193,8 @@ export default function OverviewPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 6" horizontal={false} stroke="rgba(255,255,255,0.04)" />
-              <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }} width={86} axisLine={false} tickLine={false} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }} width={86} axisLine={false} tickLine={false} />
               <Tooltip content={<Tip />} cursor={{ fill: 'rgba(71,47,145,0.08)' }} />
               <Bar dataKey="overcharge" fill="url(#blueOrangeGrad)" radius={[0, 6, 6, 0]} />
             </BarChart>

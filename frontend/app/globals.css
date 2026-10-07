@@ -12,14 +12,14 @@
   --surface-3:   #252A4A;
 
   /* ── Borders ── */
-  --border:      #252A4A;
-  --border-2:    #2E3558;
+  --border:      #2B3056;
+  --border-2:    #343C68;
 
-  /* ── Text — all bumped up for readability ── */
+  /* ── Text — calibrated for dark-purple surfaces ── */
   --text-primary:   #F0F2FF;
-  --text-secondary: #C5CADF;
-  --text-muted:     #8B93B8;
-  --text-dim:       #525A7E;
+  --text-secondary: #CDD2EA;
+  --text-muted:     #9BA4C7;
+  --text-dim:       #6B75A0;
 
   /* ── Purple — #472F91 base ── */
   --purple:       #472F91;
@@ -108,7 +108,7 @@ body {
 .label {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-family: var(--font-mono);
@@ -199,7 +199,7 @@ body {
 .data-table td {
   padding: 14px 20px;
   border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   vertical-align: middle;
   font-size: 14px;
   line-height: 1.4;
@@ -240,7 +240,7 @@ body {
   border-color: var(--orange);
   box-shadow: 0 0 0 3px var(--orange-light);
 }
-.input::placeholder { color: var(--text-dim); font-size: 13px; }
+.input::placeholder { color: var(--text-muted); font-size: 13px; }
 
 /* ── Layout ── */
 .page-header {
@@ -262,8 +262,8 @@ body {
   text-align: center; gap: 8px;
 }
 .empty-icon { font-size: 36px; opacity: 0.2; margin-bottom: 10px; }
-.empty-title { font-size: 16px; font-weight: 700; color: var(--text-muted); }
-.empty-sub { font-size: 13px; color: var(--text-dim); max-width: 260px; line-height: 1.6; }
+.empty-title { font-size: 16px; font-weight: 700; color: var(--text-secondary); }
+.empty-sub { font-size: 13px; color: var(--text-muted); max-width: 260px; line-height: 1.6; }
 
 /* ── Animations ── */
 @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }

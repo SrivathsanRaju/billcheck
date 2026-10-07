@@ -108,9 +108,9 @@ export default function BatchDetailPage() {
       <div className="page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <Link href="/batches" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)', textDecoration: 'none', letterSpacing: '0.06em' }}>BATCHES</Link>
-            <span style={{ color: 'var(--border-2)', fontSize: 12 }}>/</span>
-            <span className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>#{batchId}</span>
+            <Link href="/batches" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', textDecoration: 'none', letterSpacing: '0.06em' }}>BATCHES</Link>
+            <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>/</span>
+            <span className="mono" style={{ fontSize: 10, color: 'var(--text-secondary)' }}>#{batchId}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h1 className="page-title mono">Batch #{batchId}</h1>

@@ -116,7 +116,7 @@ export default function Sidebar() {
               <div style={{ fontWeight: 800, fontSize: 18, lineHeight: 1, letterSpacing: '-0.4px' }}>
                 <span style={{ color: 'white' }}>Bill</span><span style={{ color: '#F57921' }}>Check</span>
               </div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.40)', marginTop: 3, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)', marginTop: 3, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace' }}>
                 Audit Engine
               </div>
             </div>
@@ -131,7 +131,7 @@ export default function Sidebar() {
 
         {/* Nav label */}
         <div style={{ padding: '16px 22px 8px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.30)', letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace' }}>Main Menu</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.50)', letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'monospace' }}>Main Menu</div>
         </div>
 
         {/* Nav */}
@@ -149,8 +149,8 @@ export default function Sidebar() {
                   transition: 'all 160ms ease',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ color: active ? 'white' : 'rgba(255,255,255,0.65)', flexShrink: 0 }}>{item.icon}</div>
-                    <span style={{ fontSize: 14, fontWeight: active ? 700 : 500, color: active ? 'white' : 'rgba(255,255,255,0.80)' }}>{item.label}</span>
+                    <div style={{ color: active ? 'white' : 'rgba(255,255,255,0.78)', flexShrink: 0 }}>{item.icon}</div>
+                    <span style={{ fontSize: 14, fontWeight: active ? 700 : 500, color: active ? 'white' : 'rgba(255,255,255,0.90)' }}>{item.label}</span>
                   </div>
                   {item.label === 'Alerts' && unread > 0 && (
                     <span style={{ background: active ? 'rgba(255,255,255,0.28)' : '#FF4757', color: 'white', borderRadius: 20, fontSize: 11, fontWeight: 700, padding: '3px 8px', flexShrink: 0, fontFamily: 'monospace' }}>
@@ -171,11 +171,11 @@ export default function Sidebar() {
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00C48C', boxShadow: '0 0 10px #00C48C', flexShrink: 0 }}/>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#00C48C' }}>All systems operational</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.30)', marginTop: 2, fontFamily: 'monospace' }}>v1.0.0 · Audit Engine</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.50)', marginTop: 2, fontFamily: 'monospace' }}>v1.0.0 · Audit Engine</div>
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', fontFamily: 'monospace' }}>BillCheck © 2025</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace' }}>BillCheck © 2025</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#F57921', background: 'rgba(245,121,33,0.15)', border: '1px solid rgba(245,121,33,0.30)', padding: '3px 8px', borderRadius: 5, fontFamily: 'monospace' }}>BETA</span>
           </div>
         </div>
